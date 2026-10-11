@@ -26,7 +26,7 @@ window.SnakeAI = (() => {
   //   space, territory, aggression  room / board share / shrinking everyone else
   //   food, eat, pellet, foodRange  pull per step toward food, eating bonus, pellet worth, reach (required)
   //   normalFood                    worth of ordinary food (default 1)
-  //   contested                     chase food even when a rival gets there first
+  //   contested                     how much food a rival reaches first still counts (0-1, true = 1)
   //   hungryBelow, fedFactor        at this length or more, food matters only fedFactor as much
   //   margin, headRisk, zoneRisk    spare room wanted / fear of a rival's next move / of where it might be (required)
   //   distance                      reward per step of distance from the nearest rival head
@@ -49,8 +49,8 @@ window.SnakeAI = (() => {
       blurb: 'Picks whichever snake it has the best shot at and cuts it off.',
       w: {
         space: 1, territory: 0.8, aggression: 0.3,
-        food: 4, eat: 60, pellet: 1, foodRange: 40, hungryBelow: 12, fedFactor: 0.2,
-        margin: 10, headRisk: 600, zoneRisk: 40, hunt: HUNT,
+        food: 6, eat: 80, pellet: 1.5, foodRange: 40, hungryBelow: 16, fedFactor: 0.3,
+        margin: 10, headRisk: 600, zoneRisk: 80, hunt: HUNT,
       },
     },
     gobbler: {
@@ -58,8 +58,8 @@ window.SnakeAI = (() => {
       blurb: 'Eats everything, even food a rival is closer to.',
       w: {
         space: 1, territory: 0.2,
-        food: 12, eat: 300, pellet: 2, foodRange: 60, contested: true,
-        margin: 2, headRisk: 500, zoneRisk: 30,
+        food: 14, eat: 300, pellet: 3, foodRange: 60, contested: 0.3,
+        margin: 6, headRisk: 800, zoneRisk: 200,
       },
     },
     ghost: {
@@ -92,7 +92,7 @@ window.SnakeAI = (() => {
       w: {
         space: 1.5, territory: 0.4,
         food: 4, eat: 60, normalFood: 0.15, pellet: 3, foodRange: 40, contested: true,
-        margin: 6, headRisk: 900, zoneRisk: 200, lure: { weight: 8, dist: 6 },
+        margin: 6, headRisk: 900, zoneRisk: 200, lure: { weight: 8, dist: 8 },
       },
     },
     mason: {
@@ -115,7 +115,7 @@ window.SnakeAI = (() => {
       w: {
         space: 1, territory: 0.5,
         food: 3, eat: 50, pellet: 1, foodRange: 30,
-        margin: 5, headRisk: 900, zoneRisk: 60, tail: 40,
+        margin: 5, headRisk: 900, zoneRisk: 150, tail: 45,
       },
     },
     metagamer: {
@@ -292,8 +292,10 @@ window.SnakeAI = (() => {
           y: Math.min(N - R - 2, Math.max(R + 1, myHead.y)),
           radius: R,
         };
+        // After two minutes the home grows a cell every 15 s, up to most of the board.
+        memory.home.radius = Math.min(14, R + Math.max(0, Math.floor((view.timeMs - 120000) / 15000)));
         ctx.home = memory.home;
-        const intruders = all.filter(k => Math.hypot(heads[k].x - ctx.home.x, heads[k].y - ctx.home.y) <= R + 1);
+        const intruders = all.filter(k => Math.hypot(heads[k].x - ctx.home.x, heads[k].y - ctx.home.y) <= ctx.home.radius + 1);
         if (intruders.length) pickVictim(intruders, ctx.w.hunt);
         else memory.victimId = null;
       },
@@ -516,7 +518,7 @@ window.SnakeAI = (() => {
           foodScore = Math.max(foodScore, v * Math.max(0, w.foodRange - (claimT[i] - t)));
         }
       }
-      if (w.contested) foodScore = Math.max(foodScore, anyFood);
+      if (w.contested) foodScore = Math.max(foodScore, Number(w.contested) * anyFood);
       // Nothing uncontested: drift toward the nearest food anyway, more weakly.
       else if (foodScore === 0) foodScore = 0.3 * anyFood;
 
@@ -557,7 +559,7 @@ window.SnakeAI = (() => {
       if (w.tail) {
         let best = 0;
         for (const o of others) {
-          if (o.body.length < 5) continue;
+          if (o.body.length < 8) continue; // short snakes' heads are too close to their tails
           best = Math.max(best, 4 - manhattan(head, o.body[o.body.length - 1]));
         }
         score += w.tail * best;
