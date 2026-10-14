@@ -51,9 +51,6 @@ window.SnakeRender = (() => {
     return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
   }
 
-  // Mute's rainbow: 360 precomputed hues instead of a string per segment per frame.
-  const HUES = [];
-  for (let h = 0; h < 360; h++) HUES.push(`hsl(${h}, 85%, 62%)`);
 
   function circle(x, y, r) {
     ctx.beginPath();
@@ -876,12 +873,47 @@ window.SnakeRender = (() => {
   // Current body color, for personas whose color changes during a round.
   function colorOf(s) {
     if (!s.persona) return s.color;
+    if (s.personaKey === 'mute') return muteShown.get(s) || s.color;
     if (s.personaKey === 'capricious' && s.memory.mood) return PERSONAS[s.memory.mood].color;
     if (s.personaKey === 'copycat' && game) {
       const model = findById(s.memory.modelId);
       if (model && model.alive) return mix(model.personaKey === 'capricious' ? colorOf(model) : model.color, '#ffffff', 0.45);
     }
     return s.color;
+  }
+
+  // Mute is a mood ring: its colour follows how it feels, from what anyone
+  // can see on the board. Stunned: dazed grey. Just made a kill: proud gold.
+  // Hemmed in, or a rival's head close: pale with fright. Its victim close:
+  // deep rose (closing the box). Stalking someone: deep violet. Otherwise
+  // calm violet. It changes over a moment, in a few steps.
+  const MUTE_MOODS = { calm: '#a855f7', stalking: '#6d28d9', closing: '#be123c', scared: '#dbeafe', proud: '#eab308', dazed: '#9ca3af' };
+  const muteState = new Map(), muteShown = new Map(); // snake -> { from, to, at, key }; snake -> the colour now
+  // ...and its face says it too: the brows (outer end, arch, inner end, along
+  // the head: more negative is higher) and, unless it's biting, the mouth.
+  const MUTE_BROWS = { calm: [0.05, -0.04, 0.04], stalking: [0.0, 0.03, 0.11], closing: [-0.03, 0.06, 0.15], scared: [0.09, 0.0, -0.05], proud: [0.03, -0.02, 0.07], dazed: [0.07, 0.07, 0.07] };
+  function muteMood(s) {
+    if (s.stunUntil > game.tick) return 'dazed';
+    for (const o of game.snakes) if (!o.alive && o.killerId === s.id && o.killer !== 'self' && game.tick - (o.diedAt ?? -99) < 30) return 'proud';
+    const h = s.body[0];
+    let shut = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = h.x + dx, y = h.y + dy;
+      if (x < 0 || y < 0 || x >= GRID || y >= GRID || game.holes.has(y * GRID + x) || game.snakes.some(o => o.alive && o.body.some(c => c.x === x && c.y === y))) shut++;
+    }
+    if (shut >= 3 || game.snakes.some(o => o !== s && o.alive && Math.abs(o.body[0].x - h.x) + Math.abs(o.body[0].y - h.y) <= 2)) return 'scared';
+    const v = findById(s.memory.victimId);
+    if (v && v.alive) return Math.abs(v.body[0].x - h.x) + Math.abs(v.body[0].y - h.y) <= 4 ? 'closing' : 'stalking';
+    return 'calm';
+  }
+  function updateMute(s, now) {
+    const key = muteMood(s), mood = MUTE_MOODS[key];
+    let m = muteState.get(s);
+    if (!m) muteState.set(s, m = { from: mood, to: mood, at: -1e9 });
+    m.key = key;
+    if (mood !== m.to) { m.from = muteShown.get(s) || m.to; m.to = mood; m.at = now; }
+    const k = reduced ? 1 : Math.min(1, (now - m.at) / 400);
+    muteShown.set(s, mix(m.from, m.to, Math.round(k * 6) / 6)); // (in steps: each a cached colour ramp)
   }
 
   function findById(id) {
@@ -1016,12 +1048,7 @@ window.SnakeRender = (() => {
       for (let i = 0; i < n; i++) fills[i] = WILD(i);
       return;
     }
-    if (look === 'mute') { // a rainbow that runs down the body, behind a white greasepaint face
-      const t0 = reduced ? 0 : Math.floor(now / 15);
-      for (let i = 0; i < n; i++) fills[i] = HUES[(t0 + i * 28) % 360];
-      fills[0] = '#f8fafc';
-      return;
-    }
+    const mime = look === 'mute'; // (its mood's colour down the body, behind a white greasepaint face: below)
     if (look === 'joker') {
       for (let i = 0; i < n; i++) fills[i] = i === 0 ? '#f8fafc' : i % 2 ? '#f59e0b' : '#a21caf';
       return;
@@ -1043,6 +1070,7 @@ window.SnakeRender = (() => {
     }
     if (look === 'vulture') { fills[0] = '#f9a8d4'; if (n > 1) fills[1] = '#f5f5f4'; } // bald pink head, white neck ruff
     if (look === 'desperado') { if (n > 1) fills[1] = '#dc2626'; for (let i = 4; i < n; i += 4) fills[i] = '#fde68a'; } // bandana, poncho stripes
+    if (mime) fills[0] = '#f8fafc';
   }
 
   // Once a frame per snake: where each segment is (between its last two
@@ -1056,6 +1084,7 @@ window.SnakeRender = (() => {
     }
     a.n = n;
     a.look = lookOf(s);
+    if (s.personaKey === 'mute' && !dead) updateMute(s, now);
     a.color = colorOf(s);
     a.isPlayer = !s.persona;
     // A pale rim so dark bodies read on the bark (Joker's amber and white do already).
@@ -1196,6 +1225,10 @@ window.SnakeRender = (() => {
   const MARKS = { '#fde047': 'spots', '#c4b5fd': 'rings', '#7dd3fc': 'dots' };
   const markOf = color => MARKS[color] || '';
   function drawOutline(s, a) {
+    if (s.leaps > 0) { // holding a power (leaps): a faint golden outline, breathing, until it's spent
+      ctx.fillStyle = rgba('#fbbf24', reduced ? 0.45 : 0.35 + 0.15 * Math.sin(lastNow / 260));
+      silhouette(a, 5.5);
+    }
     if (a.isPlayer) {
       const mine = s.id === viewerId;
       if (mine) {
@@ -2483,18 +2516,25 @@ window.SnakeRender = (() => {
         ctx.lineWidth = c * 0.05;
         ctx.lineCap = 'round';
         ctx.beginPath(); ctx.moveTo(-c * 0.44, 0); ctx.lineTo(-c * 0.52, -c * 0.06); ctx.stroke();
-        if (!open || open < 0.08) { // the lips: a small dark bow
-          ctx.fillStyle = '#7f1d1d';
-          ctx.beginPath(); ctx.ellipse(c * 0.4, 0, c * 0.035, c * 0.08, 0, 0, TAU); ctx.fill();
+        const mood = muteState.get(s)?.key || 'calm', brow = MUTE_BROWS[mood];
+        if (!open || open < 0.08) { // the lips: a small dark bow (a smug curl when proud, an O when scared)
+          ctx.fillStyle = ctx.strokeStyle = '#7f1d1d';
+          ctx.lineWidth = c * 0.04;
+          if (mood === 'proud') { ctx.beginPath(); ctx.arc(c * 0.28, 0, c * 0.12, -0.75, 0.75); ctx.stroke(); }
+          else if (mood === 'scared') { ctx.fillStyle = '#18181b'; circle(c * 0.39, 0, c * 0.055); ctx.stroke(); }
+          else { ctx.beginPath(); ctx.ellipse(c * 0.4, 0, c * 0.035, c * 0.08, 0, 0, TAU); ctx.fill(); }
         } else mouth(open);
+        ctx.fillStyle = rgba(color, 0.5); // (cheeks blushing its mood)
+        circle(c * 0.24, -c * 0.26, c * 0.07); circle(c * 0.24, c * 0.26, c * 0.07);
         lookingEyes(0.055);
-        if (!blinking) { // brows arched high (always surprised), and a tear under one eye
+        if (!blinking) { // brows: arched high when calm, knitted when it's hunting, raised in the middle when scared...
           ctx.strokeStyle = INK;
           ctx.lineWidth = c * 0.035;
           ctx.beginPath();
-          for (const sg of [-1, 1]) { ctx.moveTo(c * 0.05, sg * c * 0.3); ctx.quadraticCurveTo(-c * 0.04, sg * c * 0.2, c * 0.04, sg * c * 0.1); }
+          for (const sg of [-1, 1]) { ctx.moveTo(c * brow[0], sg * c * 0.3); ctx.quadraticCurveTo(c * brow[1], sg * c * 0.2, c * brow[2], sg * c * 0.1); }
           ctx.stroke();
-        }
+        } // ...and a tear under one eye
+
         ctx.fillStyle = INK;
         ctx.beginPath(); ctx.moveTo(c * 0.27, c * 0.2); ctx.quadraticCurveTo(c * 0.33, c * 0.24, c * 0.3, c * 0.27); ctx.quadraticCurveTo(c * 0.27, c * 0.24, c * 0.27, c * 0.2); ctx.fill();
         break;
@@ -2642,11 +2682,39 @@ window.SnakeRender = (() => {
   const fields = [];          // this frame's fields: { x, y, r, color, owner, key }
   const inField = new Map();  // snake -> the field keys its head was in last frame
   const ripples = [];         // a ripple where someone crossed in: { x, y, color, at }
-  // (x, y, r: where it's drawn, eased as it moves or swells; id: which
-  // field it is; lookR: the radius it's settling to, whose look is cached;
-  // swell: 1 just after it grew or shrank, fading to 0.)
-  function drawField(x, y, r, color, owner, now, id, lookR = r, swell = 0) {
-    const key = id;
+  // Every field this frame (homes and colonies), drawn knowing about each
+  // other: a snake's own fields that overlap (Colonist's colonies) are one
+  // merged field, one rim round the lot; where two snakes' fields meet, the
+  // border between them crackles. A field: { x, y, r (drawn, eased as it
+  // moves or swells), color, owner, id, lookR (the radius it's settling to,
+  // whose look is cached), swell (1 just after it grew or shrank, fading) }.
+  const fieldSpecs = [];
+  function drawFields(now) {
+    fieldSpecs.length = 0;
+    for (const s of game.snakes) {
+      if (!s.alive) continue;
+      if (s.memory.home) fieldSpecs.push(homeField(s, now));
+      if (s.memory.colonies) for (const c of s.memory.colonies) {
+        const cr = (c.radius + 1) * CELL;
+        fieldSpecs.push({ x: c.x * CELL + CELL / 2, y: c.y * CELL + CELL / 2, r: cr, color: s.color, owner: s, id: 'colony' + s.id + ':' + (c.n || 1) + ':' + c.x + ',' + c.y, lookR: cr, swell: 0 });
+      }
+    }
+    for (let i = 0; i < fieldSpecs.length; i++) drawField(i, now);
+    for (const s of game.snakes) if (s.alive && s.memory.colonies) drawColonyFlags(s, now);
+  }
+  // Is (px, py) inside another field (than i): of the same owner (same) or of someone else's?
+  function insideOther(i, px, py, same, slack = 0) {
+    const f = fieldSpecs[i];
+    for (let j = 0; j < fieldSpecs.length; j++) {
+      if (j === i) continue;
+      const o = fieldSpecs[j];
+      if ((o.owner === f.owner) !== same) continue;
+      if (Math.hypot(px - o.x, py - o.y) < o.r - slack) return true;
+    }
+    return false;
+  }
+  function drawField(i, now) {
+    const f = fieldSpecs[i], { x, y, r, color, owner, id } = f, lookR = f.lookR || r, swell = f.swell || 0, key = id;
     fields.push({ x, y, r, color, owner, key });
     let alert = false;
     for (const s of game.snakes) {
@@ -2666,6 +2734,11 @@ window.SnakeRender = (() => {
       if (Math.abs(hx + CELL / 2 - x) < r + CELL && Math.abs(hy + CELL / 2 - y) < r + CELL) ctx.rect(hx, hy, CELL, CELL);
     }
     ctx.clip('evenodd');
+    for (let j = 0; j < i; j++) { // (not again where its own field's already drawn: one merged field)
+      const o = fieldSpecs[j];
+      if (o.owner !== owner || Math.hypot(o.x - x, o.y - y) >= o.r + r) continue;
+      ctx.beginPath(); ctx.rect(0, 0, SIZE, SIZE); ctx.arc(o.x, o.y, o.r, 0, TAU); ctx.clip('evenodd');
+    }
     ctx.globalAlpha = alert ? 1 : 0.85 + 0.15 * pulse;
     ctx.drawImage(look.body, x - side / 2, y - side / 2, side, side);
     if (lively) { // ripples welling out from the middle, lighting up the honeycomb as they pass
@@ -2690,14 +2763,49 @@ window.SnakeRender = (() => {
     const wobble = fieldWeather(x, y, r, color, look.lattice, side, id, now, flare);
     ctx.restore();
     ctx.globalAlpha = 1;
-    // The rim: a soft glow and a bright line, breathing (and shivering in the wind)...
-    ctx.beginPath(); ctx.arc(x, y, r - 2 + wobble, 0, TAU);
-    ctx.lineWidth = 8 + 4 * flare;
-    ctx.strokeStyle = rgba(color, Math.min(1, (alert ? 0.32 : 0.16) + 0.08 * pulse + 0.3 * flare));
-    ctx.stroke();
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = rgba(color, Math.min(1, (alert ? 0.9 : 0.5) + 0.2 * pulse + 0.4 * flare));
-    ctx.stroke();
+    // The rim: a soft glow and a bright line, breathing (and shivering in the
+    // wind)... in pieces: none where it's inside another of its owner's
+    // fields (they're one field), and where it's inside someone else's, a
+    // crackling seam instead (two fields pushing against each other).
+    const rr = r - 2 + wobble, steps = Math.max(24, Math.round(r / 5));
+    const others = fieldSpecs.length > 1;
+    let anyRim = false, seams = null;
+    ctx.beginPath();
+    for (let k = 0; k < steps; k++) {
+      const a0 = k / steps * TAU, a1 = (k + 1) / steps * TAU, am = (a0 + a1) / 2;
+      const mx = x + Math.cos(am) * rr, my = y + Math.sin(am) * rr;
+      if (others && insideOther(i, mx, my, true, 1)) continue;
+      if (others && insideOther(i, mx, my, false)) { (seams ||= []).push([a0, a1]); continue; }
+      ctx.moveTo(x + Math.cos(a0) * rr, y + Math.sin(a0) * rr);
+      ctx.arc(x, y, rr, a0, a1);
+      anyRim = true;
+    }
+    if (anyRim) {
+      ctx.lineWidth = 8 + 4 * flare;
+      ctx.strokeStyle = rgba(color, Math.min(1, (alert ? 0.32 : 0.16) + 0.08 * pulse + 0.3 * flare));
+      ctx.stroke();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = rgba(color, Math.min(1, (alert ? 0.9 : 0.5) + 0.2 * pulse + 0.4 * flare));
+      ctx.stroke();
+    }
+    if (seams) { // the seam: a jagged, flickering line of light, and the odd spark
+      ctx.beginPath();
+      for (const [a0, a1] of seams) {
+        for (let q = 0; q <= 3; q++) {
+          const a = a0 + (a1 - a0) * q / 3, jit = lively ? Math.sin(t * 47 + a * 31 + i) * 2.2 : 0;
+          const px = x + Math.cos(a) * (rr + jit), py = y + Math.sin(a) * (rr + jit);
+          if (q) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+        }
+        if (lively && Math.random() < 0.012) spawn(x + Math.cos(a0) * rr, y + Math.sin(a0) * rr, 2, 90, 260, 1.6, '#fef08a', '#ffffff');
+      }
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = rgba('#fde047', lively ? 0.25 + 0.15 * Math.sin(t * 13 + i) : 0.3);
+      ctx.stroke();
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = rgba('#fefce8', 0.9);
+      ctx.stroke();
+    }
     if (snowCover > 0.02) { // ...snow gathered along its top...
       ctx.lineCap = 'round';
       ctx.strokeStyle = rgba('#ffffff', 0.55 * snowCover);
@@ -2711,9 +2819,10 @@ window.SnakeRender = (() => {
     }
     if (lively) { // ...with sparks running round it
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      for (let i = 0; i < 5; i++) {
-        const a = t * (0.5 + i * 0.12) * (i % 2 ? 1 : -1) + i * 1.3;
-        circle(x + Math.cos(a) * (r - 2), y + Math.sin(a) * (r - 2), 1.7);
+      for (let n = 0; n < 5; n++) {
+        const a = t * (0.5 + n * 0.12) * (n % 2 ? 1 : -1) + n * 1.3, sx = x + Math.cos(a) * (r - 2), sy = y + Math.sin(a) * (r - 2);
+        if (others && insideOther(i, sx, sy, true, 1)) continue;
+        circle(sx, sy, 1.7);
       }
     }
   }
@@ -2797,7 +2906,7 @@ window.SnakeRender = (() => {
   // Sovereign's home: drawn where it is, easing to wherever it has moved or
   // grown to, flaring as it changes size.
   const homeShown = new Map(); // snake -> { x, y, r, tr, at }
-  function drawHome(s, now) {
+  function homeField(s, now) {
     const h = s.memory.home;
     const tx = h.x * CELL + CELL / 2, ty = h.y * CELL + CELL / 2, tr = (h.radius + 1) * CELL;
     let e = homeShown.get(s);
@@ -2805,7 +2914,7 @@ window.SnakeRender = (() => {
     if (tr !== e.tr) { e.tr = tr; e.at = now; }
     const k = reduced ? 1 : 1 - Math.exp(-frameDt / 260);
     e.x += (tx - e.x) * k; e.y += (ty - e.y) * k; e.r += (tr - e.r) * k;
-    drawField(e.x, e.y, e.r, s.color, s, now, 'home' + s.id, tr, Math.max(0, 1 - (now - e.at) / 900));
+    return { x: e.x, y: e.y, r: e.r, color: s.color, owner: s, id: 'home' + s.id, lookR: tr, swell: Math.max(0, 1 - (now - e.at) / 900) };
   }
 
   // The Union Flag, as flown over the Empire's colonies (a redcoat's flag: St
@@ -2892,8 +3001,7 @@ window.SnakeRender = (() => {
 
   // Colonist's colonies: a force field each, and a flag flying over it (the
   // Union Flag over the first, an ensign over later ones).
-  function drawColonies(s, now) {
-    for (const c of s.memory.colonies) drawField(c.x * CELL + CELL / 2, c.y * CELL + CELL / 2, (c.radius + 1) * CELL, s.color, s, now, 'colony' + s.id + ':' + (c.n || 1) + ':' + c.x + ',' + c.y);
+  function drawColonyFlags(s, now) {
     for (const c of s.memory.colonies) {
       const x = c.x * CELL + CELL / 2, y = c.y * CELL + CELL / 2;
       ctx.strokeStyle = '#e7d7b1';
@@ -2960,7 +3068,7 @@ window.SnakeRender = (() => {
     const look = lookOf(s), col = colorOf(s);
     let fill = col[0] === '#' ? col : '#a16207', mark = '';
     if (s.personaKey === 'wildcard') fill = WILD(i);
-    else if (look === 'mute') fill = i === 0 ? '#f8fafc' : HUES[(i * 28) % 360];
+    else if (look === 'mute') fill = i === 0 ? '#f8fafc' : fill; // (its mood's colour as it went)
     else if (look === 'joker') fill = i === 0 ? '#f8fafc' : i % 2 ? '#f59e0b' : '#a21caf';
     else if (look === 'sniper' && i % 3 === 2) fill = mix(fill, '#fca5a5', 0.35);
     else if (look === 'vulture' && i < 2) fill = i ? '#f5f5f4' : '#f9a8d4';
@@ -3792,11 +3900,7 @@ window.SnakeRender = (() => {
     ctx.setTransform(k, 0, 0, k, sx, sy);
     drawCanopy(now);
 
-    for (const s of game.snakes) {
-      if (!s.alive) continue;
-      if (s.memory.home) drawHome(s, now);
-      if (s.memory.colonies) drawColonies(s, now);
-    }
+    drawFields(now); // (homes and colonies: their force fields, then the colonies' flags)
 
 
     drawBurrows(now);
@@ -3818,6 +3922,7 @@ window.SnakeRender = (() => {
     if (sky.snow > 0.5) breathe(now);
     drawBolt(now);
     drawMotes(dt);
+    drawBlasts(now);
     drawParticles(dt);
     drawYou(now);
     drawFloaters(dt);
@@ -3848,11 +3953,8 @@ window.SnakeRender = (() => {
       ctx.textBaseline = 'middle';
       ctx.lineJoin = 'round';
       const below = hy < c * 2.6, sgn = below ? 1 : -1; // (near the top edge: under the head, pointing up)
-      if (!mine) { // a friend: its name
-        ctx.font = `700 ${Math.round(c * 0.5)}px Fredoka, system-ui, sans-serif`;
-        const ty = hy + sgn * c * 0.95;
-        ctx.lineWidth = c * 0.12; ctx.strokeStyle = 'rgba(58,38,20,0.85)'; ctx.strokeText(s.name, hx, ty);
-        ctx.fillStyle = col; ctx.fillText(s.name, hx, ty);
+      if (!mine) { // a friend: the same arrow (a touch smaller), with the name they picked
+        marker(hx, hy, sgn, col, s.name, 0.82, t);
         continue;
       }
       // A ring pulsing round your head...
@@ -3882,26 +3984,35 @@ window.SnakeRender = (() => {
       }
       // ...and a bouncing arrow with YOU on it.
       ctx.globalAlpha = youA;
-      const bob = Math.sin(t * 5) * c * 0.18, tip = hy + sgn * (c * 0.9 + Math.abs(bob)), aw = c * 0.55, ah = c * 0.6;
-      ctx.fillStyle = '#fffbea';
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = c * 0.07;
-      ctx.beginPath();
-      ctx.moveTo(hx, tip);
-      ctx.lineTo(hx - aw, tip + sgn * ah);
-      ctx.lineTo(hx - aw * 0.42, tip + sgn * ah);
-      ctx.lineTo(hx - aw * 0.42, tip + sgn * ah * 1.7);
-      ctx.lineTo(hx + aw * 0.42, tip + sgn * ah * 1.7);
-      ctx.lineTo(hx + aw * 0.42, tip + sgn * ah);
-      ctx.lineTo(hx + aw, tip + sgn * ah);
-      ctx.closePath();
-      ctx.stroke(); ctx.fill();
-      ctx.font = `700 ${Math.round(c * 0.85)}px Fredoka, system-ui, sans-serif`;
-      const ly = tip + sgn * (ah * 1.7 + c * 0.6), lx = Math.min(SIZE - c * 1.2, Math.max(c * 1.2, hx));
-      ctx.lineWidth = c * 0.16; ctx.strokeStyle = 'rgba(58,38,20,0.9)'; ctx.strokeText('YOU', lx, ly);
-      ctx.fillStyle = col; ctx.fillText('YOU', lx, ly);
+      marker(hx, hy, sgn, col, 'YOU', 1, t);
     }
     ctx.globalAlpha = 1;
+  }
+  // A bouncing arrow over a head (under it, sgn 1, near the top edge) with a
+  // label in the snake's colour; scale 1 for yours.
+  function marker(hx, hy, sgn, col, label, scale, t) {
+    const c = CELL * scale;
+    const bob = Math.sin(t * 5) * c * 0.18, tip = hy + sgn * (CELL * 0.9 + Math.abs(bob)), aw = c * 0.55, ah = c * 0.6;
+    ctx.fillStyle = '#fffbea';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = c * 0.07;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(hx, tip);
+    ctx.lineTo(hx - aw, tip + sgn * ah);
+    ctx.lineTo(hx - aw * 0.42, tip + sgn * ah);
+    ctx.lineTo(hx - aw * 0.42, tip + sgn * ah * 1.7);
+    ctx.lineTo(hx + aw * 0.42, tip + sgn * ah * 1.7);
+    ctx.lineTo(hx + aw * 0.42, tip + sgn * ah);
+    ctx.lineTo(hx + aw, tip + sgn * ah);
+    ctx.closePath();
+    ctx.stroke(); ctx.fill();
+    ctx.font = `700 ${Math.round(c * (label === 'YOU' ? 0.85 : 0.62))}px Fredoka, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const ly = tip + sgn * (ah * 1.7 + c * 0.6), half = Math.min(SIZE / 2, ctx.measureText(label).width / 2 + 4), lx = Math.min(SIZE - half, Math.max(half, hx));
+    ctx.lineWidth = c * 0.16; ctx.strokeStyle = 'rgba(58,38,20,0.9)'; ctx.strokeText(label, lx, ly);
+    ctx.fillStyle = col; ctx.fillText(label, lx, ly);
   }
 
   // Call after every tick, with that tick's events: sets off pops, gulps and puffs.
@@ -3937,6 +4048,7 @@ window.SnakeRender = (() => {
         noteRemains(e.snake, now);
         // A comic-book word where it went down: KO! if a snake did it, Bonk! for a wall or a hole.
         const k = e.snake.killer, h = e.snake.body[0];
+        if (!reduced && e.snake.killerId === viewerId && e.snake.id !== viewerId && e.snake.killer !== 'self') shake(3); // (your kill: you feel it)
         if (k !== 'hunger') floater(h.x * CELL + CELL / 2, Math.max(CELL * 1.3, h.y * CELL - CELL * 0.2), k === 'wall' || k === 'self' || !game.snakes.some(o => o.name === k) ? 'Bonk!' : 'KO!');
       } else if (e.type === 'crash') { // a bonk where it hit, the head's lunge, and its tail breaking off as beads
         const s = e.snake, a = animOf(s, now), h = s.body[0];
@@ -4027,12 +4139,41 @@ window.SnakeRender = (() => {
     deaths.length = 0;
   }
 
+  // Out: it goes off with a pop. A white flash and a shockwave ring in its
+  // colour at its head, a burst of pieces from the head and along the body,
+  // and smoke.
+  const blasts = []; // { x, y, at, color }
   function burst(s) {
-    const col = colorOf(s);
-    for (let i = 0; i < s.body.length; i += 3) {
+    const col = colorOf(s), hex = col[0] === '#' ? col : '#f6ecd2', h = s.body[0];
+    const hx = h.x * CELL + CELL / 2, hy = h.y * CELL + CELL / 2;
+    blasts.push({ x: hx, y: hy, at: lastNow, color: hex });
+    spawn(hx, hy, 26, 380, T.PARTICLE_LIFE * 1.3, 3.4, hex, '#fffbea');
+    for (let i = 1; i < s.body.length; i += 2) {
       const c = s.body[i];
-      spawn(c.x * CELL + CELL / 2, c.y * CELL + CELL / 2, Math.max(2, Math.round(T.PARTICLES_DEATH / Math.ceil(s.body.length / 3))), 200, T.PARTICLE_LIFE * 1.2, 3, col[0] === '#' ? col : '#f6ecd2', '#a16207');
+      spawn(c.x * CELL + CELL / 2, c.y * CELL + CELL / 2, Math.max(2, Math.round(T.PARTICLES_DEATH / Math.ceil(s.body.length / 2))), 240, T.PARTICLE_LIFE * 1.2, 3, hex, '#a16207');
     }
+    for (let i = 0; i < 6; i++) mote(hx + (Math.random() - 0.5) * CELL, hy + (Math.random() - 0.5) * CELL, (Math.random() - 0.5) * 30, -18 - Math.random() * 18, 1400, 4 + Math.random() * 3, 2);
+  }
+  function drawBlasts(now) {
+    for (let i = blasts.length - 1; i >= 0; i--) {
+      const b = blasts[i], t = (now - b.at) / 480;
+      if (t >= 1 || t < 0) { blasts.splice(i, 1); continue; }
+      const grow = reduced ? 0.5 : t;
+      const fr = CELL * (0.7 + 1.5 * grow); // the flash: a fireball, white-hot at the heart
+      const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, fr);
+      glow.addColorStop(0, '#ffffff'); glow.addColorStop(0.35, '#fef08a'); glow.addColorStop(0.7, 'rgba(249,115,22,0.55)'); glow.addColorStop(1, 'rgba(249,115,22,0)');
+      ctx.globalAlpha = (1 - t) * (1 - t);
+      ctx.fillStyle = glow;
+      circle(b.x, b.y, fr);
+      ctx.globalAlpha = 1 - t; // the shockwave
+      ctx.strokeStyle = b.color;
+      ctx.lineWidth = 7 * (1 - t) + 1;
+      ctx.beginPath(); ctx.arc(b.x, b.y, CELL * (0.5 + 3.4 * grow), 0, TAU); ctx.stroke();
+      ctx.strokeStyle = '#fffbea';
+      ctx.lineWidth = 2 * (1 - t);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Before drawing: unheld deaths burst; held ones whose time is up burst or start fading.
@@ -4177,6 +4318,7 @@ window.SnakeRender = (() => {
     scorchDrawn = 0;
     fireTick = -1;
     bolt = null; rainbow = null; dive = null; flashAt = -1e9;
+    blasts.length = 0;
     bird.placed = false; bird.arrivedAt = -1e9;
     for (const k in sky) sky[k] = 0;
     snowCover = 0;

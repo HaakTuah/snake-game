@@ -66,7 +66,7 @@ window.SnakeChatter = (() => {
       weather: { sun: ['The sun shines on our realm.'], storm: ['We do not approve of this weather.'], rain: ['Fetch the royal umbrella.'], snow: ['Fetch the royal furs.'] },
       woodpecker: ['Who invited that bird?', 'We did not authorise this pecking.'],
       rainbow: ['The heavens salute us.'],
-      realm: { grow: ['Our realm expands!', 'A greater sovereign needs a greater realm.', 'Behold: more kingdom.'], shrink: ['Our realm… contracts. Temporarily.', 'A strategic retreat. A royal one.'], move: ['The court relocates.', 'We have moved to better lands.'] },
+      realm: { grow: ['Our realm expands!', 'A greater sovereign needs a greater realm.', 'Behold: more kingdom.'], shrink: ['Our realm… contracts. Temporarily.', 'A strategic retreat. A royal one.'], move: ['The court relocates.', 'We have moved to better lands.'], burning: ['Our realm is ablaze! Fetch the royal bucket!', 'Who set fire to the royal grounds?'], pecked: ['That bird is pecking holes in OUR land!', 'Our realm, full of holes. Unacceptable.'], invaded: ['A colony? On OUR land, {who}?!', '{who} dares plant a flag in our realm!'] },
       bonk: ['We meant to do that.', 'Who put that there?'],
       burning: ['Fetch the royal bucket!'],
       cut: ['That bird has committed treason.'],
@@ -78,7 +78,7 @@ window.SnakeChatter = (() => {
       hungry: ["I say, is there nothing to eat out here?"],
       start: ['Splendid day for an expedition!', 'Tally ho!'],
       idle: ['I say!', 'Jolly good.', 'Anyone for tea?', 'Rule, Britannia!'],
-      flag: ['I claim this bark for the Crown!', 'Another colony! Splendid.', 'Mine now. Terribly sorry.', 'Run up the ensign!', 'Another ensign for the Empire!'],
+      flag: ['I claim this bark for the Crown!', 'Another colony! Splendid.', 'Mine now. Terribly sorry.', 'Run up the ensign!', 'Another ensign for the Empire!', 'I claim this for the Crown. Which crown? Mine.'],
       intruder: ['Ahem. That’s a colony, {who}.', 'I say, that patch is spoken for.'],
       kill: ['Frightfully sorry, old chap.', 'Should have read the flag, {who}.'],
       weather: { rain: ['Ah, proper weather at last.', 'Rain? Just like home.'], storm: ['Batten down the hatches!'], sun: ['The sun never sets on us, you know.'], snow: ['Bracing! Simply bracing.'] },
@@ -89,6 +89,7 @@ window.SnakeChatter = (() => {
       cut: ['Dash it, my tail!'],
       gloat: ['Mind the Empire, {who}.'],
       baked: ['Roast dinner! Splendid.'],
+      colony: { burning: ['I say, the colony’s on fire!', 'Fire in the colony! Form a bucket chain!'], pecked: ['That bird’s pecking up my colony!', 'Blast! Holes all over the colony.'] },
       dies: ['Stiff upper lip…'],
     },
     drab: {
@@ -709,7 +710,18 @@ window.SnakeChatter = (() => {
     "Hup! Ta-daaa!": "嘿！哒哒——！",
     "*bows mid-air*": "*在空中鞠躬*",
     "I can fly! For a second!": "我会飞！就一秒！",
-    "We rise above it all.": "朕凌驾于一切之上。"
+    "We rise above it all.": "朕凌驾于一切之上。",
+    "Our realm is ablaze! Fetch the royal bucket!": "朕的疆土着火了！拿御用水桶来！",
+    "Who set fire to the royal grounds?": "谁放火烧了皇家领地？",
+    "That bird is pecking holes in OUR land!": "那只鸟在朕的土地上啄洞！",
+    "Our realm, full of holes. Unacceptable.": "朕的疆土满是窟窿。不可接受。",
+    "A colony? On OUR land, {who}?!": "殖民地？在朕的土地上，{who}？！",
+    "{who} dares plant a flag in our realm!": "{who}竟敢在朕的疆土上插旗！",
+    "I say, the colony’s on fire!": "我说，殖民地着火了！",
+    "Fire in the colony! Form a bucket chain!": "殖民地起火了！排成一队传水桶！",
+    "That bird’s pecking up my colony!": "那只鸟在啄我的殖民地！",
+    "Blast! Holes all over the colony.": "该死！殖民地上全是洞。",
+    "I claim this for the Crown. Which crown? Mine.": "我以王室之名占领这里。哪个王室？我的。"
   };
 
   const SNAKE_GAP = 4500;  // ms of game time between lines from the same snake
@@ -996,7 +1008,23 @@ window.SnakeChatter = (() => {
       if (m.victimId != null && m.victimId !== was.victimId && (m.home || m.colonies)) {
         say(s, 'intruder', game.snakes.find(o => o.id === m.victimId));
       }
-      if ((m.planted || 0) > (was.planted || 0)) say(s, 'flag');
+      if ((m.planted || 0) > (was.planted || 0)) {
+        say(s, 'flag');
+        // (planted inside Sovereign's realm: Sovereign has something to say about it)
+        const c = m.colonies?.[m.colonies.length - 1];
+        const sov = c && alive.find(o => o !== s && o.memory.home && Math.hypot(c.x - o.memory.home.x, c.y - o.memory.home.y) <= o.memory.home.radius + 1 + c.radius);
+        if (sov) say(sov, 'realm.invaded', s, true);
+      }
+      // Sovereign and Colonist: their land on fire, or pecked full of holes.
+      const lands = m.home ? [{ x: m.home.x, y: m.home.y, r: m.home.radius + 1 }] : m.colonies?.length ? m.colonies.map(c => ({ x: c.x, y: c.y, r: c.radius + 1 })) : null;
+      if (lands) {
+        const N = window.TUNING.GRID, tag = m.home ? 'realm' : 'colony';
+        const inLand = k => lands.some(l => Math.hypot(k % N - l.x, Math.floor(k / N) - l.y) <= l.r);
+        for (const e of game.events) if (e.type === 'peck' && (e.cells || []).some(inLand)) say(s, tag + '.pecked', null, true);
+        if (game.tick % 10 === 0 && game.fires?.size && game.time - (was.fireAt ?? -1e9) > 12000) {
+          for (const [k, f] of game.fires) if (game.tick >= f.from && inLand(k)) { was.fireAt = game.time; say(s, tag + '.burning', null, true); break; }
+        }
+      }
       // Sovereign's realm grew, shrank or moved.
       if (m.home && was.realm) {
         if (m.home.radius !== was.realm.radius) say(s, m.home.radius > was.realm.radius ? 'realm.grow' : 'realm.shrink', null, true);

@@ -85,7 +85,7 @@ Each round, three of these seventeen are picked at random. The start screen tell
 | **Vulture** | black, pink bald head, hooked beak, scowl | Hovers near snakes in trouble and feeds on what they leave behind. |
 | **Mason** | Caesar in marble, laurel wreath | Walls off the board, then keeps the biggest piece. |
 | **Wildcard** | the Stars and Stripes, orange tan, golden combover, long red tie | A random mix of habits, new every round. |
-| **Mute** | a rainbow mime: white greasepaint, beret, a painted tear | Picks someone and closes an invisible box around them. Never says a word (it mimes). |
+| **Mute** | a mood-ring mime: white greasepaint, beret, a painted tear; its body turns the colour of how it feels | Picks someone and closes an invisible box around them. Never says a word (it mimes). |
 | **Creeper** | teal, slit eyes | Sneaks up and rides right behind other snakes' tails. |
 | **Metagamer** | cyan, 3D glasses | Watches how each rival plays, then avoids the aggressive ones, shadows the greedy ones and hunts the evasive ones. |
 | **Capricious** | changes with its mood | Starts undecided, then switches between sniper, glutton, hermit and builder every few seconds. |

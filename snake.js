@@ -1006,11 +1006,11 @@
   }
 
   // The scoreboard dot: the snake's current color,
-  // the flag for Wildcard, two-tone for Joker, veined marble for Mason, a rainbow
-  // for Mute, and Vulture's pink head (black would vanish).
+  // the flag for Wildcard, two-tone for Joker, veined marble for Mason, Mute's
+  // mood, and Vulture's pink head (black would vanish).
   function dotColor(s) {
     if (s.personaKey === 'wildcard') return 'linear-gradient(135deg, #3c3b6e 0 42%, #b22234 42% 56%, #fff 56% 70%, #b22234 70% 84%, #fff 84%)';
-    if (s.personaKey === 'mute') return 'conic-gradient(#f87171, #facc15, #4ade80, #22d3ee, #818cf8, #f472b6, #f87171)';
+    if (s.personaKey === 'mute') return R.colorOf(s); // (its mood, as it changes)
     if (s.personaKey === 'joker') return 'linear-gradient(90deg, #a21caf 50%, #f59e0b 50%)';
     if (s.personaKey === 'mason') return 'linear-gradient(135deg, #f5f1e8 0 38%, #8a94a6 40% 45%, #ebe5d9 47% 68%, #c9a227 70% 74%, #ebe5d9 76%)';
     return s.persona?.ink || R.colorOf(s);
