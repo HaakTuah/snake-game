@@ -563,6 +563,56 @@ window.SnakeRender = (() => {
     }
     g.fill();
   };
+  // A golden leaf (on the wind: dashes), bigger and brighter than the leaves
+  // that fall, with a darker gold midrib and veins and a bright edge.
+  const goldLeafSprite = () => sprite('goldleaf', '', g => {
+    const c = CELL * 1.25;
+    const grad = g.createLinearGradient(-c * 0.3, -c * 0.2, c * 0.3, c * 0.2);
+    grad.addColorStop(0, '#fef08a'); grad.addColorStop(0.55, '#facc15'); grad.addColorStop(1, '#ca8a04');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.moveTo(-c * 0.32, 0);
+    g.quadraticCurveTo(-c * 0.02, -c * 0.24, c * 0.32, 0);
+    g.quadraticCurveTo(-c * 0.02, c * 0.24, -c * 0.32, 0);
+    g.fill();
+    g.strokeStyle = 'rgba(58,38,20,0.7)';
+    g.lineWidth = c * 0.03;
+    g.stroke();
+    g.strokeStyle = 'rgba(133,77,14,0.75)'; // the midrib and stalk, and veins
+    g.lineWidth = c * 0.028;
+    g.beginPath(); g.moveTo(-c * 0.42, c * 0.02); g.lineTo(c * 0.26, 0); g.stroke();
+    g.lineWidth = c * 0.02;
+    g.beginPath();
+    for (const x of [-0.16, -0.02, 0.12]) { g.moveTo(c * x, 0); g.lineTo(c * (x + 0.09), -c * 0.1); g.moveTo(c * x, 0); g.lineTo(c * (x + 0.09), c * 0.1); }
+    g.stroke();
+    g.strokeStyle = 'rgba(255,251,234,0.8)'; // a bright edge, catching the light
+    g.lineWidth = c * 0.02;
+    g.beginPath(); g.moveTo(-c * 0.2, -c * 0.1); g.quadraticCurveTo(c * 0.02, -c * 0.19, c * 0.24, -c * 0.03); g.stroke();
+  });
+  // A golden mushroom (in the rain: the edges wrap): the mushroom's shape,
+  // a gold cap with white spots and a shine.
+  const goldcapSprite = () => sprite('goldcap', '', g => {
+    const c = CELL;
+    g.fillStyle = '#fef3c7';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(-c * 0.1, -c * 0.02, c * 0.2, c * 0.36, c * 0.07); else g.rect(-c * 0.1, -c * 0.02, c * 0.2, c * 0.36);
+    g.fill();
+    const grad = g.createLinearGradient(0, -c * 0.3, 0, 0);
+    grad.addColorStop(0, '#fef08a'); grad.addColorStop(0.5, '#facc15'); grad.addColorStop(1, '#b45309');
+    g.fillStyle = grad;
+    g.beginPath(); g.ellipse(0, 0, c * 0.42, c * 0.32, 0, Math.PI, 0); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(58,38,20,0.6)';
+    g.lineWidth = c * 0.05;
+    g.stroke();
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.arc(-c * 0.19, -c * 0.1, c * 0.06, 0, TAU); g.fill();
+    g.beginPath(); g.arc(c * 0.06, -c * 0.21, c * 0.06, 0, TAU); g.fill();
+    g.beginPath(); g.arc(c * 0.23, -c * 0.06, c * 0.05, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,251,234,0.85)'; // a shine on the cap
+    g.lineWidth = c * 0.04;
+    g.lineCap = 'round';
+    g.beginPath(); g.arc(0, 0, c * 0.3, Math.PI * 1.2, Math.PI * 1.45); g.stroke();
+  });
   const mushroomSprite = () => sprite('mushroom', '', drawMushroom);
   const drawMushroom = g => {
     const c = CELL;
@@ -1090,26 +1140,42 @@ window.SnakeRender = (() => {
     // A pale rim so dark bodies read on the bark (Joker's amber and white do already).
     a.rim = !a.isPlayer && a.look !== 'joker' && (a.look === 'vulture' || lumaOf(a.color) < 0.4);
     const prev = s.prev, { pts, cor } = a;
+    const snap = a.dashTick === game?.tick;
+    if (snap) alpha = 1; // (dashing: it's there at once, its streak behind it)
+    // (A snake that's had the edges wrap this round: its body may run off one
+    // edge and on at the other, and a segment may move across one.)
+    const wrapped = s.wrapUntil >= 0;
     for (let i = 0; i < n; i++) {
       const c = s.body[i];
       const p = prev && i < prev.length ? prev[i] : c;
-      pts[2 * i] = (p.x + (c.x - p.x) * alpha) * CELL + CELL / 2;
-      pts[2 * i + 1] = (p.y + (c.y - p.y) * alpha) * CELL + CELL / 2;
+      const px = wrapped ? nearOf(p.x, c.x) : p.x, py = wrapped ? nearOf(p.y, c.y) : p.y;
+      pts[2 * i] = (px + (c.x - px) * alpha) * CELL + CELL / 2;
+      pts[2 * i + 1] = (py + (c.y - py) * alpha) * CELL + CELL / 2;
       // The band to the next segment runs through the cell this one left
       // (where the next one is headed), so a bend never cuts its corner.
       if (i < n - 1) {
-        const q = prev && i < prev.length ? prev[i] : s.body[i + 1];
+        const q = prev && i < prev.length && !snap ? prev[i] : s.body[i + 1]; // (dashing: the bends it lies on now)
         cor[2 * i] = q.x * CELL + CELL / 2;
         cor[2 * i + 1] = q.y * CELL + CELL / 2;
       }
     }
+    a.offs = wrapped ? unwrap(a, n) : null;
     // A held corpse presses its head a little into whatever it hit.
     if (impact) { pts[0] += s.dir.x * CELL * impact; pts[1] += s.dir.y * CELL * impact; }
-    // Leaping (this tick): the head arcs up and over, the neck after it.
-    if (a.leapTick === game?.tick && !dead && !reduced) {
-      const up = Math.sin(Math.min(1, alpha) * Math.PI) * CELL * 0.7;
-      pts[1] -= up;
-      if (n > 1) pts[3] -= up * 0.45;
+    // Leaping: the head rises over what it's hopping as it takes off, and
+    // comes down on the far side the next tick, the neck after it (its shadow
+    // stays on the bark).
+    a.rise = 0;
+    if (!dead && !reduced && game) {
+      const k = Math.min(1, alpha);
+      a.rise = a.leapTick === game.tick ? Math.sin(k * Math.PI / 2) : a.leapTick + 1 === game.tick ? Math.cos(k * Math.PI / 2) : 0;
+      if (a.rise > 0) {
+        const up = a.rise * CELL * (a.leapGold ? 0.9 : 0.7);
+        a.groundX = pts[0]; a.groundY = pts[1];
+        pts[1] -= up;
+        if (n > 1) pts[3] -= up * 0.55;
+        if (n > 2) pts[5] -= up * 0.2;
+      }
     }
     // Just crashed: the head lunges into what it hit, and bounces back.
     const hit = a.crashAt ? (now - a.crashAt) / 260 : 1;
@@ -1122,6 +1188,36 @@ window.SnakeRender = (() => {
     for (let i = 0; i < n; i++) a.rad[i] = radius(i, n, a, a.tickPos);
     fillsOf(s, a, now);
     return a;
+  }
+
+  // A coordinate (in cells) moved a whole board's width, if that brings it
+  // near ref (a segment that moved across a wrapped edge: any real move is
+  // three cells at most, a crossing nearly the board's width).
+  const nearOf = (v, ref) => v - ref > GRID / 2 ? v - GRID : ref - v > GRID / 2 ? v + GRID : v;
+  // A body that runs across a wrapped edge, made one unbroken chain from the
+  // head (so parts of it lie off the board), and the offsets to draw it at
+  // as well, so what's off one edge shows at the other.
+  const OFFS = [[0, 0]];
+  function unwrap(a, n) {
+    const { pts, cor } = a, half = SIZE / 2;
+    const near = (v, ref) => v - ref > half ? v - SIZE : ref - v > half ? v + SIZE : v;
+    for (let i = 0; i < n - 1; i++) {
+      cor[2 * i] = near(cor[2 * i], pts[2 * i]); cor[2 * i + 1] = near(cor[2 * i + 1], pts[2 * i + 1]);
+      pts[2 * i + 2] = near(pts[2 * i + 2], cor[2 * i]); pts[2 * i + 3] = near(pts[2 * i + 3], cor[2 * i + 1]);
+    }
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < n; i++) {
+      x0 = Math.min(x0, pts[2 * i]); x1 = Math.max(x1, pts[2 * i]);
+      y0 = Math.min(y0, pts[2 * i + 1]); y1 = Math.max(y1, pts[2 * i + 1]);
+    }
+    if (x0 >= 0 && y0 >= 0 && x1 <= SIZE && y1 <= SIZE) return null;
+    const xs = [0], ys = [0], offs = [];
+    if (x0 < 0) xs.push(SIZE);
+    if (x1 > SIZE) xs.push(-SIZE);
+    if (y0 < 0) ys.push(SIZE);
+    if (y1 > SIZE) ys.push(-SIZE);
+    for (const ox of xs) for (const oy of ys) offs.push([ox, oy]);
+    return offs;
   }
 
   // Segment radius: a big head, a body that tapers to the tail, plus any gulp passing through.
@@ -1214,6 +1310,7 @@ window.SnakeRender = (() => {
     ctx.translate(2, 4);
     silhouette(a, 0);
     ctx.translate(-2, -4);
+    if (a.rise > 0) shadowAt(a.groundX + 2, a.groundY + CELL * 0.3, 1.1 - 0.4 * a.rise); // (in the air: its shadow on the bark below)
   }
 
   // Pass 2: people's cream outline (yours bright with a soft halo, so you find
@@ -1224,8 +1321,11 @@ window.SnakeRender = (() => {
   // colour (lavender and sky look alike to many colour-blind players).
   const MARKS = { '#fde047': 'spots', '#c4b5fd': 'rings', '#7dd3fc': 'dots' };
   const markOf = color => MARKS[color] || '';
+  // Holding a golden power: golden leaps or dashes, or the edges wrapping
+  // round for it (flickering in its last two seconds).
+  const powered = s => s.leaps > 0 || s.dashes > 0 || (s.wrapUntil > game.time && (reduced || s.wrapUntil - game.time > 2000 || Math.floor(lastNow / 120) % 2 === 0));
   function drawOutline(s, a) {
-    if (s.leaps > 0) { // holding a power (leaps): a faint golden outline, breathing, until it's spent
+    if (powered(s)) { // a faint golden outline, breathing, until it's spent
       ctx.fillStyle = rgba('#fbbf24', reduced ? 0.45 : 0.35 + 0.15 * Math.sin(lastNow / 260));
       silhouette(a, 5.5);
     }
@@ -1381,18 +1481,34 @@ window.SnakeRender = (() => {
     else drawFace(s, look, color, blinking, a);
     ctx.restore();
 
-    if (!dead && s.leaps > 0) { // leaps held: a golden ring round the head, a pip on it for each
+    const wrapLeft = game ? s.wrapUntil - game.time : 0;
+    if (!dead && (s.leaps > 0 || s.dashes > 0 || wrapLeft > 0)) { // a golden ring round the head: a pip for each leap (round) or dash (a diamond); wrapping, it runs down
       const t = reduced ? 0 : now / 1000, rr = CELL * (0.66 + 0.04 * Math.sin(t * 3));
       ctx.strokeStyle = 'rgba(251,191,36,0.75)';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(pts[0], pts[1], rr, 0, TAU); ctx.stroke();
+      if (wrapLeft > 0) { // (the edges wrap: a bright arc for the time left)
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(pts[0], pts[1], rr + 3, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, wrapLeft / T.WRAP_MS)); ctx.stroke();
+      }
       ctx.fillStyle = '#fde047';
       ctx.strokeStyle = 'rgba(58,38,20,0.8)';
       ctx.lineWidth = 1.2;
-      for (let i = 0; i < s.leaps; i++) {
-        const a2 = -Math.PI / 2 + (i - (s.leaps - 1) / 2) * 0.5;
-        ctx.beginPath(); ctx.arc(pts[0] + Math.cos(a2) * rr, pts[1] + Math.sin(a2) * rr, CELL * 0.11, 0, TAU); ctx.fill(); ctx.stroke();
+      const pips = s.leaps || s.dashes;
+      for (let i = 0; i < pips; i++) {
+        const a2 = -Math.PI / 2 + (i - (pips - 1) / 2) * 0.5, px = pts[0] + Math.cos(a2) * rr, py = pts[1] + Math.sin(a2) * rr, pr = CELL * 0.11;
+        ctx.beginPath();
+        if (s.leaps) ctx.arc(px, py, pr, 0, TAU);
+        else { ctx.moveTo(px, py - pr * 1.3); ctx.lineTo(px + pr, py); ctx.lineTo(px, py + pr * 1.3); ctx.lineTo(px - pr, py); ctx.closePath(); }
+        ctx.fill(); ctx.stroke();
       }
+    }
+    if (!dead && a.readyAt && now - a.readyAt < 450 && !reduced) { // its leap's back: a ring of light, going out
+      const k = (now - a.readyAt) / 450;
+      ctx.strokeStyle = rgba('#fffbea', 0.8 * (1 - k));
+      ctx.lineWidth = 3 * (1 - k) + 1;
+      ctx.beginPath(); ctx.arc(pts[0], pts[1], CELL * (0.6 + 0.9 * k), 0, TAU); ctx.stroke();
     }
     if (dizzy) { // a faint halo, and three stars going round on it
       const t = reduced ? 0 : now / 240, cy = Math.max(CELL * 0.3, pts[1] - CELL * 0.72);
@@ -1492,14 +1608,26 @@ window.SnakeRender = (() => {
     // (a snake leaping, or still arched over another one, goes on top)
     const over = s => anim.get(s)?.leapUntil > game.tick ? 1 : 0;
     if (live.some(over)) live.sort((p, q) => over(p) - over(q));
-    for (const s of live) drawShadow(prepare(s, alpha, now, false));
-    for (const s of live) drawOutline(s, animOf(s, now));
-    for (const s of live) drawBody(s, animOf(s, now), now, false);
-    for (const s of live) if (s.burnUntil > game.tick) drawBurning(s, animOf(s, now), now);
-    for (const s of live) { // queasy after a mushroom: a sickly green wash, fading
-      const a = animOf(s, now), q = a.queasyAt ? 1 - (now - a.queasyAt) / 1400 : 0;
+    for (const s of live) prepare(s, alpha, now, false);
+    // (each pass, for a snake across a wrapped edge, at each place it shows)
+    const each = fn => {
+      for (const s of live) {
+        const a = animOf(s, now);
+        for (const [ox, oy] of a.offs || OFFS) {
+          if (ox || oy) ctx.translate(ox, oy);
+          fn(s, a);
+          if (ox || oy) ctx.translate(-ox, -oy);
+        }
+      }
+    };
+    each((s, a) => drawShadow(a));
+    each(drawOutline);
+    each((s, a) => drawBody(s, a, now, false));
+    each((s, a) => { if (s.burnUntil > game.tick) drawBurning(s, a, now); });
+    each((s, a) => { // queasy after a mushroom: a sickly green wash, fading
+      const q = a.queasyAt ? 1 - (now - a.queasyAt) / 1400 : 0;
       if (q > 0 && q <= 1) { ctx.fillStyle = rgba('#65a30d', 0.38 * q); silhouette(a, 0.5); }
-    }
+    });
   }
 
   // A snake on fire: flames along its back (the fire's own flicker, smaller,
@@ -3296,6 +3424,31 @@ window.SnakeRender = (() => {
           b.next = now + 250 + Math.random() * 300; // (poison spores, puffing off it)
           mote(x + (Math.random() - 0.5) * CELL * 0.5, y - CELL * 0.12, (Math.random() - 0.5) * 8, -12 - Math.random() * 8, 1700, 1.8 + Math.random() * 1.2, 0);
         }
+      } else if (f.kind === 'leaf' || f.kind === 'goldcap') {
+        // Golden powers: a glow, a gentle flutter (the leaf) or bob (the mushroom), and glints.
+        const left = f.expires != null ? f.expires - game.tick : 999;
+        const fade = left > 20 ? 1 : 0.4 + 0.6 * Math.max(0, left) / 20;
+        const glow = pop * (1.1 + (lively ? 0.16 * Math.sin(t * 4) : 0)), w = SPRITE * CELL * glow;
+        ctx.globalAlpha = fade * (lively ? 0.85 + 0.15 * Math.sin(t * 4) : 1);
+        ctx.drawImage(glowSprite(), x - w / 2, y - w / 2, w, w);
+        ctx.globalAlpha = 1;
+        if (f.kind === 'leaf') {
+          const tilt = lively ? Math.sin(t * 2.2) * 0.35 : 0, lift = lively ? Math.sin(t * 3.1) * CELL * 0.06 : 0;
+          shadowAt(x + 2, y + CELL * 0.3, pop * 0.7);
+          ctx.globalAlpha = fade;
+          blitAbout(goldLeafSprite(), x, y - CELL * 0.05 + lift, 0, 0, pop, pop * (lively ? 0.85 + 0.15 * Math.cos(t * 2.2) : 1), -0.5 + tilt);
+          ctx.globalAlpha = 1;
+        } else {
+          const bob = lively ? Math.sin(t * 2.5) * CELL * 0.04 : 0;
+          shadowAt(x + 1, y + CELL * 0.33, pop * 0.8);
+          ctx.globalAlpha = fade;
+          blitAbout(goldcapSprite(), x, y + bob, 0, 0, pop, pop, 0);
+          ctx.globalAlpha = 1;
+        }
+        if (lively && b && pop >= 1 && now > b.next) {
+          b.next = now + 160 + Math.random() * 220;
+          mote(x + (Math.random() - 0.5) * CELL * 1.1, y + (Math.random() - 0.5) * CELL, 0, -6, 650, 0.35 + Math.random() * 0.3, 1);
+        }
       } else if (f.kind === 'golden') {
         // A calm dim instead of a blink when it's about to rot.
         const left = f.expires - game.tick;
@@ -3913,7 +4066,9 @@ window.SnakeRender = (() => {
     drawRainbow(now);
 
     if (corpses.length) drawCorpses(alpha, now);
+    drawWrapEdges(now);
     drawSnakes(alpha, now);
+    if (streaks.length) drawStreaks(now); // (over the body it's just covered: a blur of speed)
     drawFieldHues(now);
     drawTarget(alpha, now);
     drawRain(now);
@@ -4069,13 +4224,27 @@ window.SnakeRender = (() => {
           if (e.lost >= 1 && e.lost <= 3) floater(h.x * CELL + CELL / 2 - s.dir.x * CELL * 1.2, Math.max(CELL * 1.3, h.y * CELL - CELL * 1.4), '-' + e.lost);
           if (!reduced) shake(4);
         }
-      } else if (e.type === 'leap') { // up and over: a puff of dust where it took off
-        const a = animOf(e.snake, now), h = e.snake.body[2] || e.snake.body[0];
+      } else if (e.type === 'leap') { // up and over: a puff of dust where it took off (and gold, for a golden leap)
+        const a = animOf(e.snake, now), h = e.snake.body[e.reach || 1] || e.snake.body[0];
         a.leapTick = game.tick;
-        a.leapUntil = game.tick + e.snake.body.length; // (until the arch has run off its tail)
+        a.leapGold = !!e.gold;
+        a.leapUntil = game.tick + e.snake.body.length + 1; // (until the arch has run off its tail)
         spawn(h.x * CELL + CELL / 2, h.y * CELL + CELL / 2, 8, 140, 420, 2.2, '#d6b480', '#fde68a');
-      } else if (e.type === 'cut') { // the woodpecker took its tail
-        floater(e.x * CELL + CELL / 2, Math.max(CELL * 1.3, e.y * CELL - CELL * 0.2), 'Ouch!');
+        if (e.gold) spawn(h.x * CELL + CELL / 2, h.y * CELL + CELL / 2, 10, 120, 600, 1.8, '#fde047', '#fffbea');
+      } else if (e.type === 'dash') { // a golden streak along the way it went, and gold flecks off it
+        animOf(e.snake, now).dashTick = game.tick;
+        const h = e.snake.body[0], x0 = e.x * CELL + CELL / 2, y0 = e.y * CELL + CELL / 2, x1 = h.x * CELL + CELL / 2, y1 = h.y * CELL + CELL / 2;
+        if (Math.abs(x1 - x0) + Math.abs(y1 - y0) <= CELL * (T.DASH_LENGTH + 0.5)) { // (not across a wrapped edge)
+          streaks.push({ x0, y0, x1, y1, at: now });
+          for (let k = 0; k <= 3; k++) spawn(x0 + (x1 - x0) * k / 3, y0 + (y1 - y0) * k / 3, 4, 90, 500, 1.8, '#facc15', '#fffbea');
+        }
+      } else if (e.type === 'douse') { // a fire put out: a hiss of steam
+        const x = e.x * CELL + CELL / 2, y = e.y * CELL + CELL / 2;
+        spawn(x, y, 10, 80, 600, 2.4, '#e2e8f0', '#94a3b8');
+        if (!reduced) for (let k = 0; k < 4; k++) mote(x + (Math.random() - 0.5) * CELL * 0.6, y, (Math.random() - 0.5) * 12, -20 - Math.random() * 14, 1200, 4 + Math.random() * 3, 2);
+      } else if (e.type === 'cut') { // the woodpecker took its tail, or a dash cut through it
+        floater(e.x * CELL + CELL / 2, Math.max(CELL * 1.3, e.y * CELL - CELL * 0.2), e.by != null ? 'Snip!' : 'Ouch!');
+        if (e.by != null) spawn(e.x * CELL + CELL / 2, e.y * CELL + CELL / 2, 12, 220, 500, 2.4, '#facc15', e.snake.color || '#fffbea');
       } else if (e.type === 'alight') { // crawled into the fire: a burst of flame
         const h = e.snake.body[0];
         spawn(h.x * CELL + CELL / 2, h.y * CELL + CELL / 2, 14, 200, 520, 2.6, '#f97316', '#fde047');
@@ -4176,6 +4345,54 @@ window.SnakeRender = (() => {
     ctx.globalAlpha = 1;
   }
 
+  // While the edges wrap round for someone: they shimmer, a golden seam with
+  // light running along it, bright by a wrapping head (fading as it runs out).
+  function drawWrapEdges(now) {
+    let any = 0;
+    for (const s of game.snakes) if (s.alive && s.wrapUntil > game.time) any = Math.max(any, Math.min(1, (s.wrapUntil - game.time) / 2000));
+    if (!any) return;
+    const t = reduced ? 0 : now / 1000;
+    ctx.save();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = rgba('#fde047', 0.22 * any);
+    ctx.strokeRect(3, 3, SIZE - 6, SIZE - 6);
+    ctx.setLineDash([CELL * 0.5, CELL * 0.5]);
+    ctx.lineDashOffset = -t * CELL * 2;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = rgba('#fef9c3', 0.55 * any);
+    ctx.strokeRect(2, 2, SIZE - 4, SIZE - 4);
+    ctx.restore();
+    for (const s of game.snakes) { // (by a wrapping head: a glow on the edge it's near)
+      if (!s.alive || !(s.wrapUntil > game.time)) continue;
+      const h = s.body[0], hx = h.x * CELL + CELL / 2, hy = h.y * CELL + CELL / 2;
+      for (const [ex, ey, d] of [[0, hy, h.x], [SIZE, hy, GRID - 1 - h.x], [hx, 0, h.y], [hx, SIZE, GRID - 1 - h.y]]) {
+        if (d > 3) continue;
+        const w = SPRITE * CELL * (1.6 - d * 0.3);
+        ctx.globalAlpha = 0.7 * any * (1 - d / 4);
+        ctx.drawImage(glowSprite(), ex - w / 2, ey - w / 2, w, w);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // A dash's streak: a tapering golden blur along the way it went, gone in a moment.
+  const streaks = []; // { x0, y0, x1, y1, at }
+  function drawStreaks(now) {
+    for (let i = streaks.length - 1; i >= 0; i--) {
+      const k = streaks[i], t = (now - k.at) / 340;
+      if (t >= 1 || t < 0) { streaks.splice(i, 1); continue; }
+      const grad = ctx.createLinearGradient(k.x0, k.y0, k.x1, k.y1);
+      grad.addColorStop(0, 'rgba(250,204,21,0)'); grad.addColorStop(1, rgba('#fde047', 0.6 * (1 - t)));
+      ctx.strokeStyle = grad;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = CELL * 0.55 * (1 - 0.5 * t);
+      ctx.beginPath(); ctx.moveTo(k.x0, k.y0); ctx.lineTo(k.x1, k.y1); ctx.stroke();
+      ctx.lineWidth = CELL * 0.14 * (1 - t);
+      ctx.strokeStyle = rgba('#fffbea', 0.7 * (1 - t));
+      ctx.stroke();
+    }
+  }
+
   // Before drawing: unheld deaths burst; held ones whose time is up burst or start fading.
   function updateCorpses(now) {
     for (const s of deaths) {
@@ -4203,9 +4420,13 @@ window.SnakeRender = (() => {
       const hit = !c.fade && c.s.killer !== 'hunger';
       ctx.globalAlpha = opacity;
       const a = prepare(c.s, c.s.prev ? alpha : 1, now, true, hit ? 0.2 : 0);
-      drawShadow(a);
-      drawOutline(c.s, a);
-      drawBody(c.s, a, now, true);
+      for (const [ox, oy] of a.offs || OFFS) { // (across a wrapped edge: each place it shows)
+        if (ox || oy) ctx.translate(ox, oy);
+        drawShadow(a);
+        drawOutline(c.s, a);
+        drawBody(c.s, a, now, true);
+        if (ox || oy) ctx.translate(-ox, -oy);
+      }
       ctx.globalAlpha = 1;
       if (hit) { // at the point of contact, kept on the board
         const sx = Math.min(SIZE, Math.max(0, a.pts[0] + c.s.dir.x * CELL * 0.55));
@@ -4238,9 +4459,9 @@ window.SnakeRender = (() => {
   // top-left (for speech bubbles). boardPx is the board's CSS width.
   function headPx(s, alpha, boardPx, out) {
     const c = s.body[0], p = s.prev && s.prev[0] ? s.prev[0] : c;
-    const scale = boardPx / GRID;
-    out.x = (p.x + (c.x - p.x) * alpha + 0.5) * scale;
-    out.y = (p.y + (c.y - p.y) * alpha + 0.5) * scale;
+    const scale = boardPx / GRID, px = nearOf(p.x, c.x), py = nearOf(p.y, c.y); // (across a wrapped edge: from just off it)
+    out.x = (px + (c.x - px) * alpha + 0.5) * scale;
+    out.y = (py + (c.y - py) * alpha + 0.5) * scale;
     return out;
   }
 
@@ -4319,6 +4540,7 @@ window.SnakeRender = (() => {
     fireTick = -1;
     bolt = null; rainbow = null; dive = null; flashAt = -1e9;
     blasts.length = 0;
+    streaks.length = 0;
     bird.placed = false; bird.arrivedAt = -1e9;
     for (const k in sky) sky[k] = 0;
     snowCover = 0;
@@ -4338,6 +4560,7 @@ window.SnakeRender = (() => {
 
   return {
     showYou,
+    ready: s => { animOf(s, lastNow || performance.now()).readyAt = lastNow || performance.now(); },
     init, setGame, resize, frame, onTick, shake, hold, headPx, colorOf, markOf, celebrate, setQuality, setBoardRect,
     get quality() { return quality; },
     holding: () => deaths.length > 0 || corpses.length > 0,

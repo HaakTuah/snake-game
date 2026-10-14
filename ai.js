@@ -83,12 +83,12 @@ window.SnakeAI = (() => {
     },
     ghost: {
       name: 'Ghost', color: '#f1f5f9', look: 'ghost',
-      blurb: 'Keeps away from everyone and eats mushrooms to stay small.',
+      blurb: 'Keeps its distance from everyone, and slips through the gaps.',
       kill: 'Ghost? You never even saw it.',
       win: 'Was it ever really here?',
       w: {
         space: 2, territory: 0.6,
-        food: 3, eat: 30, pellet: 1, foodRange: 15, hungryBelow: 14, fedFactor: 0, mushroomLover: 18,
+        food: 3, eat: 30, pellet: 1, foodRange: 15, hungryBelow: 18, fedFactor: 0.4,
         margin: 6, headRisk: 900, zoneRisk: 150, distance: 7,
       },
     },
@@ -370,7 +370,8 @@ window.SnakeAI = (() => {
       const L = o.body.length;
       let hx = o.body[0].x, hy = o.body[0].y;
       for (let s = Math.min(age, o.stun || 0) + 1; s <= age; s++) { // (stunned, it didn't move)
-        const nx = hx + o.dir.x, ny = hy + o.dir.y;
+        let nx = hx + o.dir.x, ny = hy + o.dir.y;
+        if (o.wrap > 0) { nx = (nx + N) % N; ny = (ny + N) % N; } // (the edges wrap for it a while)
         if (!inside(nx, ny) || otherFree[ny * N + nx] > s) break;
         hx = nx; hy = ny;
         mineFree[hy * N + hx] = Math.max(mineFree[hy * N + hx], L);
@@ -637,9 +638,18 @@ window.SnakeAI = (() => {
     // I give twice the berth for a while, so we don't go for the same cell again.)
     others.forEach((o, k) => {
       const strike = stunLeft(o) > 1 ? 0 : w.headRisk * (o.id === me.bumped ? 2 : 1);
+      const wrapO = o.wrap > 0, at = v => wrapO ? (v + N) % N : v; // (the edges wrap for it a while)
       for (const d of DIR_LIST) {
-        const nx = heads[k].x + d.x, ny = heads[k].y + d.y;
+        const nx = at(heads[k].x + d.x), ny = at(heads[k].y + d.y);
         if (inside(nx, ny)) risk[ny * N + nx] += strike;
+      }
+      // (Its powers reach further straight on: a dash three cells, a golden
+      // leap three, anyone's leap two if there's something in front to hop.)
+      const fx = at(heads[k].x + o.dir.x), fy = at(heads[k].y + o.dir.y);
+      const far = o.dashes > 0 || o.leaps > 0 ? 3 : inside(fx, fy) && otherFree[fy * N + fx] > 1 ? 2 : 1;
+      for (let i = 2; i <= far; i++) {
+        const nx = at(heads[k].x + o.dir.x * i), ny = at(heads[k].y + o.dir.y * i);
+        if (inside(nx, ny)) risk[ny * N + nx] += strike * 0.5;
       }
       const stampZ = ++stamp;
       queue[0] = o.body[0].y * N + o.body[0].x;
@@ -714,6 +724,8 @@ window.SnakeAI = (() => {
       beetle: shrinking ? 0 : TUNE.BEETLE_GROWTH * Math.max(apple, hunger), // it moves, but it's worth what it's worth
       pellet: shrinking ? 0 : (w.pellet ?? 1),
       mushroom: shrinking ? 2 : (w.mushroom ?? -1),
+      leaf: 2 * Math.max(apple, hunger, 0.5), // (golden powers: worth it for what they do)
+      goldcap: 1.5 * Math.max(apple, hunger, 0.5),
     };
     // Per cell: foodValue is what eating it is worth (0 if nothing), foodGrow
     // what it does to my length (a mushroom takes off up to SHRINK). foodCells
@@ -934,13 +946,20 @@ window.SnakeAI = (() => {
       return score;
     }
 
+    // While the edges wrap for me (a golden mushroom): how many steps ahead
+    // that still holds (ticks are about 110 ms), and a step across an edge
+    // (a neck on the far side) read as the one step it is.
+    const wrapSteps = Math.floor((me.wrap || 0) / 130);
+    const unit = v => v > 1 ? -1 : v < -1 ? 1 : v;
+
     // Score of moving `d` as step t + 1, then playing on for `depth - 1` more steps.
     // `body` is the first `len` cells; the moved body goes into bodies[t + 1].
     function move(body, len, grow, d, depth, t, bonus) {
-      const nx = body[0].x + d.x, ny = body[0].y + d.y;
+      let nx = body[0].x + d.x, ny = body[0].y + d.y;
+      if (t < wrapSteps) { nx = (nx + N) % N; ny = (ny + N) % N; } // (the edges wrap for me a while yet)
       if (!canEnter(body, len, grow, nx, ny, t + 1)) return null;
       const i = ny * N + nx;
-      const turning = d.x !== body[0].x - body[1].x || d.y !== body[0].y - body[1].y;
+      const turning = d.x !== unit(body[0].x - body[1].x) || d.y !== unit(body[0].y - body[1].y);
       // New head in front; the tail moves up unless I'm still growing.
       let g = grow, nlen = len + 1;
       if (g > 0) g--; else nlen--;
@@ -968,7 +987,7 @@ window.SnakeAI = (() => {
     }
 
     function search(body, len, grow, depth, t, bonus) {
-      const backX = body[1].x - body[0].x, backY = body[1].y - body[0].y;
+      const backX = unit(body[1].x - body[0].x), backY = unit(body[1].y - body[0].y);
       let best = -Infinity;
       for (const d of DIR_LIST) {
         if (d.x === backX && d.y === backY) continue;
@@ -1012,7 +1031,89 @@ window.SnakeAI = (() => {
       s += Math.random() * 1e-3; // tie-break
       if (s > bestScore) { bestScore = s; bestDir = d; }
     }
+    // Powers. With nothing better than a crash every way, a leap over what's
+    // in front (golden leaps, or the plain leap when it's ready), if there's
+    // somewhere free to land: it asks for it just as a person presses.
+    if (bestScore < DEAD / 2 && !me.dashes && (me.leaps > 0 || me.leapIn === 0)) {
+      const reach = me.leaps > 0 ? 2 : 1, keep = me.grow > 0 ? me.body.length : me.body.length - 1;
+      const mine = (x, y) => { for (let j = 0; j < keep; j++) if (me.body[j].x === x && me.body[j].y === y) return true; return false; };
+      const hurdle = (x, y) => holes.has(y * N + x) || fire.has(y * N + x) || mineFree[y * N + x] > 1 || mine(x, y);
+      for (const d of [bestDir, ...DIR_LIST]) {
+        if (d.x === -me.dir.x && d.y === -me.dir.y) continue;
+        let over = false, ok = true;
+        for (let i = 1; i <= reach + 1 && ok; i++) {
+          const x = myHead.x + d.x * i, y = myHead.y + d.y * i;
+          if (!inside(x, y)) ok = false;
+          else if (i <= reach) over ||= hurdle(x, y);
+          else ok = !hurdle(x, y);
+        }
+        if (ok && over) { bestDir = d; memory.power = view.tick; break; }
+      }
+    }
+    // Golden dashes: three cells at once along the ground. Worth one to cut a
+    // rival in two (out, if it's cut right behind its head; otherwise for a
+    // good length off it, more so the more aggressive it is), to grab
+    // something golden first, or as the way out. Never into the edge or a
+    // hole (it'd blow up), never where it would crash, and only landing
+    // somewhere with room.
+    if (me.dashes > 0 && memory.power !== view.tick) {
+      const d = bestDash(bestScore < DEAD / 2);
+      if (d) { bestDir = d; memory.power = view.tick; }
+    }
     return bestDir;
+
+    function bestDash(trapped) {
+      const L = TUNE.DASH_LENGTH, keep = me.grow > 0 ? me.body.length : me.body.length - 1, wrap = me.wrap > 0;
+      const own = new Set();
+      for (let j = 0; j < keep; j++) own.add(me.body[j].y * N + me.body[j].x);
+      const wall = i => holes.has(i) && !fire.has(i); // (a hole, or where the woodpecker's about to strike; fire's put out)
+      const bodyAt = (x, y) => { // a rival's body there, and how far down it, as it'll be by the dash (it's moved on since I saw it, unless stunned)
+        for (const o of others) for (let j = 0; j < o.body.length; j++) if (o.body[j].x === x && o.body[j].y === y) return { o, j0: j, j: j + Math.max(0, age - (o.stun || 0)) };
+        return null;
+      };
+      const gold = new Set(); // (food worth dashing for: golden things)
+      for (const f of food) if (f.kind === 'golden' || f.kind === 'leaf' || f.kind === 'goldcap' || f.gold) gold.add(f.y * N + f.x);
+      const cutW = 0.5 + (w.aggression || 0);
+      let best = null, bestV = 5.5;
+      for (const d of DIR_LIST) {
+        if (d.x === -me.dir.x && d.y === -me.dir.y) continue;
+        let x = myHead.x, y = myHead.y, v = trapped ? 100 : 0, ok = true;
+        for (let i = 1; i <= L && ok; i++) {
+          x += d.x; y += d.y;
+          if (wrap) { x = (x + N) % N; y = (y + N) % N; }
+          const k = y * N + x;
+          if (!inside(x, y) || wall(k) || own.has(k)) { ok = false; break; }
+          if (fire.has(k)) { /* (fire: it's put out) */ } else if (mineFree[k] > 1) { // (a rival's body that'll still be there)
+            const b = bodyAt(x, y), px = x + d.x, py = y + d.y;
+            const thick = b && inside(px, py) && b.o.body.some(c => c.x === px && c.y === py);
+            if (!b || b.j0 === 0 || thick) { ok = false; break; } // (a head, or two thick: a crash)
+            v += b.j < TUNE.MIN_LENGTH ? 60 : (b.o.body.length - b.j) * cutW;
+          }
+          if (gold.has(k)) v += 3 * Math.max(1, foodValue[k]); // (something golden, first)
+          if (i === L && risk[k] > 0) v -= 4; // (landing by a rival's head)
+        }
+        if (!ok || v <= bestV) continue;
+        const room = roomAt(y * N + x, own, Math.min(40, myLen + 4));
+        if (room < Math.min(40, myLen + 4)) continue;
+        best = d; bestV = v;
+      }
+      return best;
+    }
+    function roomAt(i0, own, cap) {
+      const z = ++stamp;
+      queue[0] = i0; seen[i0] = z;
+      let read = 0, write = 1;
+      while (read < write && write < cap) {
+        const i = queue[read++];
+        for (let n = 4 * i; n < 4 * i + 4; n++) {
+          const ni = nbr[n];
+          if (ni < 0 || seen[ni] === z || (holes.has(ni) && !fire.has(ni)) || mineFree[ni] > 2 || own.has(ni)) continue;
+          seen[ni] = z;
+          queue[write++] = ni;
+        }
+      }
+      return write;
+    }
   }
 
   return { DIRS, PERSONAS, POOL, decide };

@@ -63,7 +63,8 @@ for (let r = 0; r < rounds; r++) {
     same(r, k, 'alive', host.snakes.map(s => s.alive), guest.snakes.map(s => s.alive));
     same(r, k, 'dirs', host.snakes.map(s => s.dir), guest.snakes.map(s => s.dir));
     same(r, k, 'hunger', host.snakes.map(s => [s.eaten, s.lastAte, s.nextStarve]), guest.snakes.map(s => [s.eaten, s.lastAte, s.nextStarve]));
-    same(r, k, 'stuns, burns and leaps', host.snakes.map(s => [s.stunUntil, s.burnUntil, s.burnFrom, s.leaps, s.leapArmed]), guest.snakes.map(s => [s.stunUntil, s.burnUntil, s.burnFrom, s.leaps, s.leapArmed]));
+    const powers = g => g.snakes.map(s => [s.stunUntil, s.burnUntil, s.burnFrom, s.leaps, s.leapArmed, s.dashes, s.leapReadyAt, s.wrapUntil, s.flight ? s.flight.dir : null]);
+    same(r, k, 'stuns, burns and powers', powers(host), powers(guest));
     const food = g => g.food.map(f => [f.x, f.y, f.kind, f.expires, f.color, f.dir && f.kind === 'beetle' ? f.dir : null, f.px ?? null, f.py ?? null, f.movedAt ?? null, !!f.scared, f.heat || 0, !!f.cooked, !!f.gold]);
     same(r, k, 'food', food(host), food(guest));
     same(r, k, 'holes', [...host.holes], [...guest.holes]);
@@ -72,7 +73,8 @@ for (let r = 0; r < rounds; r++) {
     same(r, k, 'fire', [...host.fires].map(([c, f]) => [c, f.from, f.until, f.strike, f.group, !!f.ember]), [...guest.fires].map(([c, f]) => [c, f.from, f.until, f.strike, f.group, !!f.ember]));
     same(r, k, 'weather', [host.weather.kind, host.weather.since, host.weather.until], [guest.weather.kind, guest.weather.since, guest.weather.until]);
     same(r, k, 'deaths', dyingHost.map(s => [s.id, s.cause, s.killer, s.killerId]), dyingGuest.map(s => [s.id, s.cause, s.killer, s.killerId]));
-    same(r, k, 'events', host.events.map(e => [e.type, e.snake?.id, e.kind, e.x, e.y]), guest.events.map(e => [e.type, e.snake?.id, e.kind, e.x, e.y]));
+    const ev = g => g.events.map(e => [e.type, e.snake?.id, e.kind, e.x, e.y, e.gold ? 1 : 0, e.reach ?? null, e.n ?? null, e.by ?? null]); // (powers' payloads too)
+    same(r, k, 'events', ev(host), ev(guest));
     const look = g => g.snakes.map(s => ['home', 'colonies', 'mood', 'moodChangedAt', 'modelId'].map(f => s.memory[f] ?? null));
     same(r, k, 'looks', look(host), look(guest));
   }

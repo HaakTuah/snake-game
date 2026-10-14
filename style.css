@@ -209,6 +209,13 @@ header { min-width: 0; }
 
 .scoreboard .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scoreboard .len { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Powers: a little badge (golden when it's a golden power; yours, lit when your leap's ready). */
+.scoreboard .pow { flex: 0 3 auto; min-width: 1.3em; overflow: hidden; text-overflow: clip; padding: 0 5px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; line-height: 1.35; color: var(--ink-soft); background: rgba(58, 38, 20, 0.08); opacity: 0.55; white-space: nowrap; }
+.scoreboard .pow.ready { opacity: 1; color: var(--ink); background: rgba(58, 38, 20, 0.14); }
+.scoreboard .pow.gold { opacity: 1; color: #713f12; background: #fde047; box-shadow: 0 0 0 1px rgba(161, 98, 7, 0.5); }
+.scoreboard .pow.wrap { box-shadow: 0 0 0 1.5px #eab308; }
+.scoreboard .pow.wrap:not(.mine) { opacity: 1; color: var(--ink); } /* the edges wrap: a gold ring (your leap's readiness still shows) */
+/* (the badge gives way before the name does, on a narrow tag) */
 
 /* Hunger: a thin bar along the bottom of each tag (scaled, never resized). */
 .scoreboard .hunger {

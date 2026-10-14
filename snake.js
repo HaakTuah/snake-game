@@ -39,19 +39,20 @@
   const pick = list => list[Math.floor(Math.random() * list.length)];
   const FLAVOR = {
     intro: 'Three rivals. One mossy log. Last snake wriggling wins.',
-    hintStart: 'Arrows or WASD steer · Space naps · Enter starts · H opens the Hall of Fame',
-    hintKeys: 'Arrows or WASD steer · Space naps · Enter starts over · H opens the Hall of Fame · M mutes · N toggles the music',
-    hintOnline: 'Arrows or WASD steer · M mutes · N toggles the music',
-    hintTouch: 'Swipe to steer · Tap ⏸ to nap',
+    hintStart: 'Arrows or WASD steer · the way you’re going leaps · Space naps · Enter starts · H opens the Hall of Fame',
+    hintKeys: 'Arrows or WASD steer · the way you’re going leaps · Space naps · Enter starts over · H opens the Hall of Fame · M mutes · N toggles the music',
+    hintOnline: 'Arrows or WASD steer · the way you’re going leaps · M mutes · N toggles the music',
+    hintTouch: 'Swipe to steer · swipe the way you’re going to leap · Tap ⏸ to nap',
     rivals: ['Your rivals today:', 'Up on the log with you:', 'Sharing your bark:'],
     spectators: ['Tonight on the bark:', 'In the ring today:', 'Place your bets:'],
     go: ['Slither!', 'Off you go.', 'Mind the edges.'],
     goWatch: ['And they’re off.', 'Off they slither.', 'Let the wriggling begin.'],
     pause: ['Snakes need rest too.', 'Curled up in a warm patch of bark.', 'The log will wait.'],
     wake: touchFirst ? 'Tap Wake up when you’re ready.' : 'Space or P to wake up.',
-    deathTitle: { wall: ['Bonk!', 'Thwack!'], self: ['Tangled!', 'Knotted!'], rival: ['Squashed!', 'Splat!'], headOn: ['Head-on!', 'Clonk!'], fire: ['Toasted!', 'Scorched!'] },
+    deathTitle: { boom: ['Kaboom!', 'Ka-blam!'], wall: ['Bonk!', 'Thwack!'], self: ['Tangled!', 'Knotted!'], rival: ['Squashed!', 'Splat!'], headOn: ['Head-on!', 'Clonk!'], fire: ['Toasted!', 'Scorched!'] },
     wall: ['The log goes on. You don’t.', 'That edge came out of nowhere.', 'Even logs have edges.'],
     self: ['Of all the snakes to bite.', 'You were in your own way.', 'You can’t outrun yourself.'],
+    boom: ['A dash needs somewhere to go.', 'Full speed, no brakes.', 'Golden, briefly.'],
     hole: ['The woodpecker sends its regards.', 'Mind the gap.', 'The woodpecker missed you. The hole didn’t.'],
     starved: ['Should have eaten something.', 'Hunger always wins in the end.', 'All slither, no snacks.'],
     fire: ['Too hot to handle.', 'You found the fire. The hard way.', 'Lightning never strikes twice. It didn’t need to.', 'Burned to a crisp. A small crisp.'],
@@ -83,9 +84,18 @@
     youGolden: ['Golden! +3.', 'Shiny and delicious. +3.'],
     beetle: ['A beetle is out for a walk. It won’t get far.', 'Something crunchy is crawling about.'],
     youBeetle: ['Crunchy! +2.', 'Caught it! +2.'],
-    goldBeetle: ['A golden beetle! Catch it, and you can leap over things.', 'Something golden is scuttling about. Catch it: it’s worth a leap or two.'],
-    youGoldBeetle: n => `Golden! You’ve got ${n} leap${n === 1 ? '' : 's'}: press the way you’re going (or swipe forward) to hop over a body or a hole.`,
+    goldBeetle: ['A golden beetle! Catch it for golden leaps: further, and free.', 'Something golden is scuttling about. Catch it: it’s worth a golden leap or two.'],
+    youGoldBeetle: n => `Golden! ${n} golden leap${n === 1 ? '' : 's'}: press the way you’re going to hop up to two cells, free.`,
     youLeap: ['Hup! Over it.', 'Clean over!'],
+    youLeapFirst: 'Hup! A leap hops a body, a hole or fire. It costs the tip of your tail, and needs a moment before the next.',
+    leaf: ['A golden leaf on the wind! Catch it to dash.', 'Something golden blew onto the log.'],
+    youLeaf: n => `A golden leaf! ${n} dash${n === 1 ? '' : 'es'}: press the way you’re going to shoot three cells, cutting through a snake one thick and putting out fire. Mind the edge.`,
+    youDash: ['Whoosh!', 'Zing!', 'Zoom!'],
+    goldcap: ['A golden mushroom in the rain!', 'Something golden came up in the rain.'],
+    youGoldcap: s => `A golden mushroom! For ${s} seconds the edges let you through: off one side, in at the other.`,
+    wrapEnding: ['The edges are closing!', 'Edges closing in two seconds!'],
+    youSnip: name => `Snip! You cut ${name} in two.`,
+    youSnipped: name => `Snip! ${name} dashed right through you.`,
     youMushroom: ['You feel smaller. And somehow wiser.', 'A little less of you. Sneaky.'],
     youHungry: ['Your tummy is rumbling. Time for a snack.', 'Getting peckish… find food soon.'],
     newBest: n => `New best: ${n}!`,
@@ -505,7 +515,7 @@
   function youDied() {
     const p = player();
     const titles = FLAVOR.deathTitle;
-    const title = p.killer === 'hunger' ? 'Starved!' : p.cause === 'fell into a woodpecker hole' ? 'Down the hole!'
+    const title = p.killer === 'hunger' ? 'Starved!' : /blew up/.test(p.cause) ? pick(titles.boom) : p.cause === 'fell into a woodpecker hole' ? 'Down the hole!'
       : pick(p.killer === 'fire' ? titles.fire : p.killer === 'wall' ? titles.wall : p.killer === 'self' ? titles.self : p.cause.startsWith('crashed') ? titles.headOn : titles.rival);
     pendingCard = {
       title,
@@ -576,6 +586,7 @@
     const killer = game.snakes.find(s => s !== p && s.name === p.killer);
     if (killer?.persona) return killer.persona.kill;
     if (killer) return pick(FLAVOR.friendKill);
+    if (/blew up/.test(p.cause)) return pick(FLAVOR.boom);
     if (p.cause === 'fell into a woodpecker hole') return pick(FLAVOR.hole);
     // A crash only ends you when you're tiny or boxed in; boxed in, say so.
     if ((p.killer === 'self' || p.killer === 'wall') && p.body.length > T.MIN_LENGTH) return pick(FLAVOR.boxed);
@@ -596,9 +607,10 @@
     for (const e of game.events) {
       if (e.type === 'eat' && isMe(e.snake)) {
         if (e.kind !== 'mushroom') { streak = game.time - streakAt < 2600 ? Math.min(streak + 1, 7) : 0; streakAt = game.time; }
-        Audio.play(e.kind === 'golden' ? 'golden' : e.kind === 'pellet' ? 'meat' : e.kind === 'mushroom' ? 'mushroom' : e.kind === 'beetle' ? 'crunch' : 'eat', { pitch: e.kind === 'mushroom' ? 0 : streak, ...at(e.x) });
+        Audio.play(e.kind === 'goldcap' ? 'wrap' : e.kind === 'golden' || e.kind === 'leaf' ? 'golden' : e.kind === 'pellet' ? 'meat' : e.kind === 'mushroom' ? 'mushroom' : e.kind === 'beetle' ? 'crunch' : 'eat', { pitch: e.kind === 'mushroom' ? 0 : streak, ...at(e.x) });
         bump(scoreEl);
-      } else if (e.type === 'woodpecker') { Audio.play('call'); Audio.play('riser'); }
+      } else if (e.type === 'eat' && e.kind === 'goldcap') Audio.play('wrap', at(e.x)); // (someone else's golden mushroom)
+      else if (e.type === 'woodpecker') { Audio.play('call'); Audio.play('riser'); }
       else if (e.type === 'aim') Audio.play('aim', at(e.x));
       else if (e.type === 'peck' && e.cells?.length) { Audio.play('drum', at(e.x)); Audio.play('crash', at(e.x)); }
       else if (e.type === 'spawn' && e.kind === 'beetle') Audio.play('beetle', at(e.x));
@@ -619,7 +631,10 @@
       else if (e.type === 'ash') Audio.play('ash', at(e.x));
       else if (e.type === 'cut') Audio.play('snip', at(e.x));
       else if (e.type === 'leap') Audio.play('leap', at(e.x));
+      else if (e.type === 'dash') Audio.play('dash', at(e.x));
+      else if (e.type === 'douse') Audio.play('douse', at(e.x));
     }
+    for (const s of dying) if (/blew up/.test(s.cause)) Audio.play('boom', at(s.body[0].x));
     for (const s of dying) {
       if (isMe(s)) continue;
       // You took them out: a knockout punch. Anyone else: a far-off thud.
@@ -691,6 +706,11 @@
     }
     const me = player();
     if (me?.alive) {
+      const wrapLeft = me.wrapUntil - game.time;
+      if (wrapLeft > 0 && wrapLeft <= 2000 && !game.toldWrapEnd) { game.toldWrapEnd = true; return toast(pick(FLAVOR.wrapEnding), 1800, 'warn'); }
+      if (wrapLeft > 2000) game.toldWrapEnd = false;
+    }
+    if (me?.alive) {
       const left = E.hungerLeft(game, me);
       if (left < T.HUNGER_WARN_MS && !game.warnedHunger) { game.warnedHunger = true; return toast(pick(FLAVOR.youHungry), 2800, 'warn'); }
       if (left > T.HUNGER_WARN_MS) game.warnedHunger = false;
@@ -705,7 +725,17 @@
       if (e.type === 'spawn' && e.kind === 'beetle' && e.gold) { flashFrame('gold'); return toast(pick(FLAVOR.goldBeetle), 2600, 'gold'); }
       if (e.type === 'spawn' && e.kind === 'beetle') { flashFrame('beetle'); return toast(pick(FLAVOR.beetle), 2200, 'beetle'); }
       if (e.type === 'eat' && isMe(e.snake) && e.gold) { flashFrame('gold', true); return toast(FLAVOR.youGoldBeetle(e.snake.leaps), 3400, 'gold'); }
-      if (e.type === 'leap' && isMe(e.snake)) return toast(pick(FLAVOR.youLeap), 900, 'gold');
+      if (e.type === 'leap' && isMe(e.snake)) {
+        if (!e.gold && !game.toldLeap) { game.toldLeap = true; return toast(FLAVOR.youLeapFirst, 3200, 'you'); }
+        return toast(pick(FLAVOR.youLeap), 900, 'gold');
+      }
+      if (e.type === 'spawn' && e.kind === 'leaf') { flashFrame('gold'); return toast(pick(FLAVOR.leaf), 2400, 'gold'); }
+      if (e.type === 'spawn' && e.kind === 'goldcap') { flashFrame('gold'); return toast(pick(FLAVOR.goldcap), 2400, 'gold'); }
+      if (e.type === 'eat' && isMe(e.snake) && e.kind === 'leaf') { flashFrame('gold', true); return toast(FLAVOR.youLeaf(e.snake.dashes), 3800, 'gold'); }
+      if (e.type === 'eat' && isMe(e.snake) && e.kind === 'goldcap') { flashFrame('gold', true); return toast(FLAVOR.youGoldcap(Math.round(T.WRAP_MS / 1000)), 3400, 'gold'); }
+      if (e.type === 'cut' && e.by != null && me && e.by === me.id) return toast(FLAVOR.youSnip(who(e.snake, true)), 1800, 'gold');
+      if (e.type === 'cut' && e.by != null && isMe(e.snake)) return toast(FLAVOR.youSnipped(game.snakes[e.by]?.name || 'Someone'), 2200, 'warn');
+      if (e.type === 'dash' && isMe(e.snake)) return toast(pick(FLAVOR.youDash), 800, 'gold');
       if (e.type === 'eat' && isMe(e.snake) && e.kind === 'beetle') { flashFrame('beetle'); return toast(pick(FLAVOR.youBeetle), 1500, 'beetle'); }
       if (e.type === 'eat' && isMe(e.snake) && e.kind === 'golden') { flashFrame('gold', true); return toast(pick(FLAVOR.youGolden), 1500, 'gold'); }
       if (e.type === 'eat' && isMe(e.snake) && e.kind === 'mushroom') return toast(pick(FLAVOR.youMushroom), 1800, 'you');
@@ -927,7 +957,7 @@
     tagsEl.textContent = '';
     for (const s of game.snakes) {
       const li = document.createElement('li');
-      li.innerHTML = '<span class="dot"></span><span class="name"></span><span class="sr-only"></span><span class="len"></span><span class="hunger"><i></i></span>';
+      li.innerHTML = '<span class="dot"></span><span class="name"></span><span class="sr-only"></span><span class="pow" hidden></span><span class="len"></span><span class="hunger"><i></i></span>';
       li.querySelector('.name').textContent = isMe(s) ? 'You' : s.name;
       li.title = s.persona ? `${s.name}: ${s.persona.blurb}` : isMe(s) ? 'You' : `${s.name}, a friend`;
       if (s.persona) li.dataset.blurb = `${s.name}: ${s.persona.blurb}`; // tapped (phones have no tooltips), it says how it plays
@@ -935,7 +965,7 @@
       const mark = R.markOf(s.color);
       if (s.isPlayer && mark) li.querySelector('.dot').dataset.mark = mark;
       tagsEl.append(li);
-      s.tag = { li, dot: li.querySelector('.dot'), state: li.querySelector('.sr-only'), len: li.querySelector('.len'), bar: li.querySelector('.hunger i'), last: {} };
+      s.tag = { li, dot: li.querySelector('.dot'), state: li.querySelector('.sr-only'), len: li.querySelector('.len'), bar: li.querySelector('.hunger i'), pow: li.querySelector('.pow'), last: {} };
     }
   }
 
@@ -1002,6 +1032,23 @@
         last.leading = leading;
       }
       if (force || last.starving !== starving) { t.li.classList.toggle('starving', starving); last.starving = starving; }
+      // Powers: golden leaps (⤴2), dashes (»2), the edges wrapping (⟳ and seconds left); on your own tag, your leap (⤴), lit when it's ready.
+      const wrapS = s.alive && s.wrapUntil > game.time ? Math.ceil((s.wrapUntil - game.time) / 1000) : 0;
+      const ready = isMe(s) && s.alive && E.leapIn(game, s) === 0;
+      const pow = !s.alive ? '' : (s.leaps ? '⤴' + s.leaps : s.dashes ? '»' + s.dashes : isMe(s) ? '⤴' : '') + (wrapS ? ' ⟳' + wrapS : '');
+      const gold = s.alive && (s.leaps > 0 || s.dashes > 0), wraps = wrapS > 0; // (the wrap: a gold ring, so your leap's readiness still shows)
+      if (force || last.pow !== pow || last.gold !== gold || last.ready !== ready || last.wraps !== wraps) {
+        t.pow.textContent = pow;
+        t.pow.hidden = !pow;
+        t.pow.classList.toggle('gold', gold);
+        t.pow.classList.toggle('wrap', wraps);
+        t.pow.classList.toggle('mine', isMe(s)); // (only your badge is dim while your leap isn't ready)
+        t.pow.classList.toggle('ready', ready);
+        t.pow.title = gold ? 'Holding a golden power' : wraps && !isMe(s) ? 'The edges wrap round for it' : ready ? 'Your leap’s ready' : 'Your leap needs a moment';
+        last.wraps = wraps;
+        if (!force && isMe(s) && ready && last.ready === false && !s.leaps && !s.dashes) { R.ready(s); Audio.play('ready'); }
+        last.pow = pow; last.gold = gold; last.ready = ready;
+      }
     }
   }
 
@@ -1129,7 +1176,8 @@
   });
 
   // Swipes: a turn registers as soon as the finger has travelled half a cell,
-  // without lifting, and one touch can chain several turns. On the board they
+  // without lifting, and one touch can chain several turns (a fresh swipe the
+  // way you're going leaps; a finger that keeps going the same way doesn't). On the board they
   // always steer; during a round they steer anywhere on the screen (over the
   // countdown card too), and the page never scrolls. Buttons stay buttons.
   let swipe = null;
@@ -1151,7 +1199,9 @@
     const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
     const threshold = Math.max(T.SWIPE_MIN_PX, (boardPx || 320) / GRID * T.SWIPE_CELLS);
     if (Math.max(Math.abs(dx), Math.abs(dy)) < threshold) return;
-    steer(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+    const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    if (dir !== swipe.last) steer(dir); // (a finger still travelling the same way is the same swipe: it doesn't leap)
+    swipe.last = dir;
     swipe.x = t.clientX;
     swipe.y = t.clientY;
   }, { passive: false });

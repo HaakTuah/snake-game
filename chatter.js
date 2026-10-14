@@ -20,6 +20,8 @@ window.SnakeChatter = (() => {
       cut: ['Lost my rear guard.'],
       gloat: ['Bounced off me, {who}? Cute.'],
       dies: ['Counter-sniped by {who}?', 'Should have relocated.', 'Impossible.'],
+      dash: ['Repositioning. Fast.'],
+      snip: ['Clean cut, {who}.'],
     },
     gobbler: {
       hungry: ["So… hungry… can’t… go on…","FOOD. NOW."],
@@ -42,12 +44,14 @@ window.SnakeChatter = (() => {
       goldbug: ['A GOLDEN beetle! Gold AND crunchy!'],
       leap: ['Wheee! Lunch from above!'],
       dies: ['Tell my apples… I loved them.'],
+      dash: ['Fast food!'],
+      snip: ['Snip! Snack-sized, {who}.'],
     },
     ghost: {
       hungry: ["…hungry…"],
       start: ['…'],
       idle: ['…', '……', '(silence)', 'boo.'],
-      mushroom: ['smaller… better…'],
+      mushroom: ['…bitter.'],
       kill: ['…sorry.'],
       weather: { storm: ['…boom.'], rain: ['…drip.'], snow: ['…brr.'] },
       woodpecker: ['…tap… tap…'],
@@ -73,6 +77,9 @@ window.SnakeChatter = (() => {
       gloat: ['Bow, {who}. Do not bump.'],
       leap: ['We rise above it all.'],
       dies: ['The king is dead…', 'Long live… someone else.'],
+      dash: ['Make way for the crown!'],
+      snip: ['Divided, {who}, and ruled.'],
+      wrap: ['Our realm knows no edges now.'],
     },
     colonist: {
       hungry: ["I say, is there nothing to eat out here?"],
@@ -137,6 +144,7 @@ window.SnakeChatter = (() => {
       cut: ['Caudam meam!'],
       gloat: ['Murum vidisti, {who}?'],
       dies: ['Et tu, {who}?', 'Alea iacta… estus.', 'Murus… meus… finis.'],
+      wrap: ['Sine muro! No wall at all!'],
     },
     wildcard: {
       hungry: ["Very hungry. The hungriest. Nobody has ever been this hungry."],
@@ -157,6 +165,9 @@ window.SnakeChatter = (() => {
       goldbug: ['A golden beetle. Very classy. Like me.'],
       leap: ['Nobody jumps better than me.'],
       dies: ['Rigged! Totally rigged!'],
+      dash: ['Fastest dash in history. Everyone says so.'],
+      snip: ['You’re cut, {who}! Tremendously cut.'],
+      wrap: ['Walls? Who needs walls? Not today.'],
     },
     creeper: {
       hungry: ["so… hungry…"],
@@ -187,6 +198,8 @@ window.SnakeChatter = (() => {
       goldbug: ['Golden beetle: mobility upgrade.'],
       leap: ['Leap executed.'],
       dies: ['That… wasn’t in the data.'],
+      dash: ['Dash: optimal.'],
+      snip: ['Cut {who} in two. Noted.'],
     },
     capricious: {
       hungry: ["Now I’m hungry! Out of nowhere!"],
@@ -207,6 +220,8 @@ window.SnakeChatter = (() => {
       cut: ['My tail! I liked that tail!'],
       leap: ['I can fly! For a second!'],
       dies: ['Changed my mind about living.'],
+      dash: ['Zoom! I felt like it!'],
+      snip: ['Oops, {who}! Was that rude?'],
     },
     copycat: {
       start: ['同志们好！'],
@@ -239,6 +254,8 @@ window.SnakeChatter = (() => {
       goldbug: ['Gold bug! Now that’s a prize, partner.'],
       leap: ['Yeehaw! Clean over!'],
       dies: ['What a ride…', 'Worth it.'],
+      dash: ['Yee-haw, full gallop!'],
+      snip: ['Draw, {who}! Too slow.'],
     },
     mute: {
       start: ['*waves silently*', '*takes a deep, silent bow*'],
@@ -254,6 +271,9 @@ window.SnakeChatter = (() => {
       gloat: ['*mimes {who} bouncing off*'],
       leap: ['*bows mid-air*'],
       dies: ['*mimes being squashed*', '*…*'],
+      dash: ['*zooms off, holding its beret*'],
+      snip: ['*mimes scissors at {who}*'],
+      wrap: ['*walks into the edge… and out the other side*'],
     },
     ouroboros: {
       hungry: ['Even I must eat. Usually myself.'],
@@ -268,6 +288,9 @@ window.SnakeChatter = (() => {
       gloat: ['Around you go, {who}.'],
       weather: { snow: ['Winter returns. It always does.'], rain: ['The rain comes round again.'] },
       dies: ['…and begin again.', 'See you next time around.'],
+      dash: ['The circle tightens. Quickly.'],
+      snip: ['Now you know how it feels, {who}.'],
+      wrap: ['No end, no beginning. As it should be.'],
     },
     joker: {
       hungry: ["Why did the snake cross the bark? It was starving."],
@@ -284,6 +307,8 @@ window.SnakeChatter = (() => {
       gloat: ['Knock knock, {who}! …Bonk!'],
       leap: ['Hup! Ta-daaa!'],
       dies: ['Tough crowd…'],
+      dash: ['Wheeee, nyoom!'],
+      snip: ['Ta-da! {who}, sawn in half!'],
     },
   };
 
@@ -475,7 +500,7 @@ window.SnakeChatter = (() => {
     "……": "…………",
     "(silence)": "（沉默）",
     "boo.": "吓！",
-    "smaller… better…": "更小……更好……",
+    "…bitter.": "……苦。",
     "…sorry.": "……对不起。",
     "Kneel.": "跪下。",
     "We are pleased to receive you. Do not touch anything.": "朕很高兴接见你。什么都别碰。",
@@ -721,7 +746,32 @@ window.SnakeChatter = (() => {
     "Fire in the colony! Form a bucket chain!": "殖民地起火了！排成一队传水桶！",
     "That bird’s pecking up my colony!": "那只鸟在啄我的殖民地！",
     "Blast! Holes all over the colony.": "该死！殖民地上全是洞。",
-    "I claim this for the Crown. Which crown? Mine.": "我以王室之名占领这里。哪个王室？我的。"
+    "I claim this for the Crown. Which crown? Mine.": "我以王室之名占领这里。哪个王室？我的。",
+    "Fast food!": "快餐！",
+    "Snip! Snack-sized, {who}.": "咔嚓！{who}，零食大小。",
+    "Make way for the crown!": "为王冠让路！",
+    "Divided, {who}, and ruled.": "分而治之，{who}。",
+    "Our realm knows no edges now.": "朕的疆土如今没有边界。",
+    "Fastest dash in history. Everyone says so.": "史上最快的冲刺。大家都这么说。",
+    "You’re cut, {who}! Tremendously cut.": "你被砍了，{who}！砍得非常彻底。",
+    "Walls? Who needs walls? Not today.": "墙？谁需要墙？今天不需要。",
+    "Dash: optimal.": "冲刺：最优解。",
+    "Cut {who} in two. Noted.": "把{who}切成两半。已记录。",
+    "Zoom! I felt like it!": "嗖！我就想这么干！",
+    "Oops, {who}! Was that rude?": "哎呀，{who}！这样是不是不礼貌？",
+    "Yee-haw, full gallop!": "驾——全速飞奔！",
+    "Draw, {who}! Too slow.": "拔枪吧，{who}！太慢了。",
+    "*zooms off, holding its beret*": "*按着贝雷帽飞奔而去*",
+    "*mimes scissors at {who}*": "*对着{who}比划剪刀*",
+    "*walks into the edge… and out the other side*": "*走进边缘……从另一边走出来*",
+    "Wheeee, nyoom!": "呜——嗖！",
+    "Ta-da! {who}, sawn in half!": "当当！{who}，被锯成两半！",
+    "Repositioning. Fast.": "快速转移阵地。",
+    "Clean cut, {who}.": "干净利落，{who}。",
+    "The circle tightens. Quickly.": "圆环收紧。很快。",
+    "Now you know how it feels, {who}.": "现在你知道那是什么滋味了，{who}。",
+    "No end, no beginning. As it should be.": "无始无终。本该如此。",
+    "Sine muro! No wall at all!": "没有墙了！一堵墙都没有！"
   };
 
   const SNAKE_GAP = 4500;  // ms of game time between lines from the same snake
@@ -962,14 +1012,14 @@ window.SnakeChatter = (() => {
           say(victim, 'dies', killer && killer !== victim ? killer : null, true);
         }
         for (const v of alive) if (v.personaKey === 'vulture' && Math.random() < 0.6) say(v, 'death', victim);
-      } else if (e.type === 'eat' && e.snake.persona) {
+      } else if (e.type === 'eat' && e.snake.persona && e.kind !== 'goldcap') { // (a golden mushroom has its own lines: below)
         if (e.kind === 'golden') say(e.snake, 'golden', null, true);
         else if (e.kind === 'beetle') say(e.snake, 'caught', null, true);
         else if (e.kind === 'mushroom') say(e.snake, 'mushroom');
         else if (Math.random() < 0.15) say(e.snake, 'eat');
       } else if (e.type === 'starving' && e.snake.persona) {
         say(e.snake, 'hungry', null, true);
-      } else if (e.type === 'spawn') {
+      } else if (e.type === 'spawn' && (e.kind === 'golden' || e.kind === 'beetle')) { // (golden apples and beetles; leaves and golden mushrooms have the narrator)
         for (const s of alive) {
           if (e.gold && VOICES[s.personaKey]?.goldbug) { say(s, 'goldbug', null, true); continue; }
           if (s.personaKey === 'gobbler' || (e.kind === 'beetle' && s.personaKey === 'desperado')) say(s, e.kind === 'beetle' ? 'beetle' : 'spawn', null, true);
@@ -985,9 +1035,15 @@ window.SnakeChatter = (() => {
         if (e.snake.persona) say(e.snake, 'bonk');
         if (other?.persona && other.alive && Math.random() < 0.5) say(other, 'gloat', e.snake);
       } else if (e.type === 'leap' && e.snake.persona) {
-        say(e.snake, 'leap', null, true);
+        if (e.gold || Math.random() < 0.3) say(e.snake, 'leap', null, !!e.gold); // (everyone leaps now: a golden one's worth a word)
+      } else if (e.type === 'dash' && e.snake.persona) {
+        say(e.snake, 'dash', null, true);
+      } else if (e.type === 'eat' && e.kind === 'goldcap' && e.snake.persona) {
+        say(e.snake, 'wrap', null, true);
       } else if (e.type === 'alight' && e.snake.persona) {
         say(e.snake, 'burning', null, true);
+      } else if (e.type === 'cut' && e.by != null && game.snakes[e.by]?.persona) { // (a dash cut it: the dasher crows)
+        say(game.snakes[e.by], 'snip', e.snake, true);
       } else if (e.type === 'cut' && e.snake.persona) {
         say(e.snake, 'cut', null, true);
       } else if (e.type === 'baked') {

@@ -20,7 +20,7 @@ window.SnakeAudio = (() => {
     rivalDeath: 120, death: 250, best: 400, win: 600,
     beat: 80, go: 80, woodpecker: 400, peck: 340, hungry: 1200, ui: 30, // peck: never more than 3 in any second
     crackle: 300, thunder: 900, gust: 1500, burrow: 1000, dig: 250, rainbow: 1500, rain: 1500,
-    ko: 200, close: 1400, field: 800, bonk: 150, bonked: 300, leap: 200, alight: 400, singe: 200, bake: 400, ash: 400, snip: 300, drum: 300, crash: 300, aim: 400, call: 2000, snow: 1500, ember: 250, riser: 1500, stinger: 1500,
+    ko: 200, close: 1400, field: 800, bonk: 150, bonked: 300, leap: 200, dash: 150, douse: 300, wrap: 1500, boom: 300, ready: 600, alight: 400, singe: 200, bake: 400, ash: 400, snip: 300, drum: 300, crash: 300, aim: 400, call: 2000, snow: 1500, ember: 250, riser: 1500, stinger: 1500,
   };
   const RESUME_GRACE = 300;    // ms after unlock() in which cues may queue on a context still waking up
   const NOISE_SECONDS = 0.5;   // length of the one shared noise buffer
@@ -413,6 +413,32 @@ window.SnakeAudio = (() => {
       tone(t, 'triangle', 300, 0.22, 0.14, 0.005, 760);
       noise(t + 0.02, 0.18, 0.06, 'bandpass', 1800, 1.2);
       mallet(t + 0.18, mtof(84), 0.12, 0.07);
+    },
+    // A dash: a zip, rising fast, and a rush of air.
+    dash(t) {
+      tone(t, 'sawtooth', 260, 0.16, 0.08, 0.004, 1400, 2400);
+      noise(t, 0.2, 0.12, 'bandpass', 2600, 0.9);
+      mallet(t + 0.12, mtof(91), 0.1, 0.06);
+    },
+    // A fire put out: a hiss of steam.
+    douse(t) {
+      noise(t, 0.4, 0.1, 'highpass', 3600, 0.7);
+      noise(t + 0.03, 0.25, 0.05, 'bandpass', 1200, 1.4);
+    },
+    // A golden mushroom: the edges open, a shimmer of bells going up and round.
+    wrap(t) {
+      [72, 79, 84, 88, 91, 96].forEach((n, i) => mallet(t + i * 0.06, mtof(n), 0.3, 0.07));
+      tone(t, 'sine', 440, 0.6, 0.04, 0.05, 880);
+    },
+    // Blown up (a dash into the edge or a hole): a bang and a rumble.
+    boom(t) {
+      noise(t, 0.6, 0.35, 'lowpass', 500, 0.7);
+      tone(t, 'sine', 120, 0.5, 0.4, 0.002, 38);
+      noise(t + 0.02, 0.18, 0.15, 'bandpass', 1600, 0.8);
+    },
+    // Your leap's ready again: a soft tick.
+    ready(t) {
+      mallet(t, mtof(86), 0.12, 0.05);
     },
     // Someone else's crash: a dull thud off to the side.
     bonked(t) {
